@@ -81,27 +81,6 @@ typedef int tailscale_conn;
 // Returns zero on success or -1 on error, call tailscale_errmsg for details.
 extern int tailscale_dial(tailscale sd, const char* network, const char* addr, tailscale_conn* conn_out);
 
-// tailscale_conn_localaddr writes the local address into buf.
-//
-// After returning, buf is always NUL-terminated.
-//
-// Returns:
-// 	0      - success
-// 	EBADF  - conn is not a valid tailscale
-// 	ERANGE - insufficient storage for buf
-extern int tailscale_conn_localaddr(tailscale_conn conn, char* buf, char* buflen);
-
-// tailscale_conn_remoteaddr writes the remote address into buf.
-//
-// After returning, buf is always NUL-terminated.
-//
-// Returns:
-// 	0      - success
-// 	EBADF  - conn is not a valid tailscale
-// 	ERANGE - insufficient storage for buf
-extern int tailscale_conn_remoteaddr(tailscale_conn conn, char* buf, char* buflen);
-
-
 // A tailscale_listener is a socket on the tailnet listening for connections.
 //
 // It is much like allocating a system socket(2) and calling listen(2).
