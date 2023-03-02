@@ -17,8 +17,14 @@ char* tmps2;
 
 char* control_url = 0;
 
+int addrlen = 128;
+char* addr = NULL;
+char* cred = NULL;
+
 int errlen = 512;
 char* err = NULL;
+
+tailscale s1, s2;
 
 int set_err(tailscale sd, char tag) {
 	err[0] = tag;
@@ -30,9 +36,11 @@ int set_err(tailscale sd, char tag) {
 
 int test_conn() {
 	err = calloc(errlen, 1);
+	addr = calloc(addrlen, 1);
+	cred = calloc(33, 1);
 	int ret;
 
-	tailscale s1 = tailscale_new();
+	s1 = tailscale_new();
 	if ((ret = tailscale_set_control_url(s1, control_url)) != 0) {
 		return set_err(s1, '0');
 	}
@@ -46,7 +54,7 @@ int test_conn() {
 		return set_err(s1, '3');
 	}
 
-	tailscale s2 = tailscale_new();
+	s2 = tailscale_new();
 	if ((ret = tailscale_set_control_url(s2, control_url)) != 0) {
 		return set_err(s2, '4');
 	}
@@ -102,11 +110,20 @@ int test_conn() {
 	if ((ret = tailscale_listener_close(ln)) != 0) {
 		return set_err(s1, 'a');
 	}
-	if ((ret = tailscale_close(s1)) != 0) {
+
+	if ((ret = tailscale_loopback_api(s1, addr, addrlen, cred)) != 0) {
 		return set_err(s1, 'b');
 	}
-	if ((ret = tailscale_close(s2)) != 0) {
-		return set_err(s2, 'c');
+
+	return 0;
+}
+
+int close_conn() {
+	if (tailscale_close(s1) != 0) {
+		return set_err(s1, 'd');
+	}
+	if (tailscale_close(s2) != 0) {
+		return set_err(s2, 'e');
 	}
 	return 0;
 }
@@ -114,6 +131,8 @@ int test_conn() {
 import "C"
 import (
 	"flag"
+	"io"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -159,6 +178,29 @@ func RunTestConn(t *testing.T) {
 	C.tmps2 = C.CString(tmps2)
 
 	if C.test_conn() != 0 {
+		t.Fatal(C.GoString(C.err))
+	}
+
+	req, err := http.NewRequest("GET", "http://"+C.GoString(C.addr)+"/localapi/v0/status", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Sec-Tailscale", "localapi")
+	req.SetBasicAuth("", C.GoString(C.cred))
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := io.ReadAll(res.Body)
+	res.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.StatusCode != 200 {
+		t.Errorf("/status: %d: %s", res.StatusCode, b)
+	}
+
+	if C.close_conn() != 0 {
 		t.Fatal(C.GoString(C.err))
 	}
 }

@@ -362,3 +362,43 @@ func TsnetSetLogFD(sd C.int, fd int) C.int {
 	}
 	return 0
 }
+
+//export TsnetLoopbackAPI
+func TsnetLoopbackAPI(sd C.int, addrOut *C.char, addrLen C.size_t, credOut *C.char) C.int {
+	// Panic here to ensure we always leave the out values NUL-terminated.
+	if addrOut == nil {
+		panic("loopback_api passed nil addr_out")
+	} else if addrLen == 0 {
+		panic("loopback_api passed addrlen of 0")
+	}
+
+	// Start out NUL-termianted to cover error conditions.
+	*addrOut = '\x00'
+	*credOut = '\x00'
+
+	s, err := getServer(sd)
+	if err != nil {
+		return s.recErr(err)
+	}
+	addr, cred, err := s.s.LoopbackLocalAPI()
+	if err != nil {
+		return s.recErr(err)
+	}
+	if len(cred) != 32 {
+		return s.recErr(fmt.Errorf("libtailscale: len(cred)=%d, want 32", len(cred)))
+	}
+	if len(addr)+1 > int(addrLen) {
+		return s.recErr(fmt.Errorf("libtailscale: loopback addr of %d bytes is too long for addrlen %d", len(addr), addrLen))
+	}
+	out := unsafe.Slice((*byte)(unsafe.Pointer(addrOut)), addrLen)
+	n := copy(out, addr)
+	out[n] = '\x00'
+
+	// credOut is non-nil and 33 bytes long because
+	// it's defined in C as char cred_out[static 33].
+	out = unsafe.Slice((*byte)(unsafe.Pointer(credOut)), 33)
+	copy(out, cred)
+	out[32] = '\x00'
+
+	return 0
+}

@@ -118,6 +118,17 @@ extern int tailscale_listener_close(tailscale_listener listener);
 // 	-1    - call tailscale_errmsg for details
 extern int tailscale_accept(tailscale_listener listener, tailscale_conn* conn_out);
 
+// tailscale_loopback_api starts a LocalAPI listener on a loopback address.
+//
+// To make http requests to the LocalAPI:
+// 	1. cred must be provided as the basic auth password
+// 	2. the header "Sec-Tailscale: localapi" must be set
+//
+// The NUL-terminated ip:port address of the LocalAPI is written to addr_out.
+// The 32-byte basic auth password + NUL-terminator is written to cred_out.
+//
+// Returns zero on success or -1 on error, call tailscale_errmsg for details.
+extern int tailscale_loopback_api(tailscale sd, char* addr_out, size_t addrlen, char cred_out[static 33]);
 
 // tailscale_errmsg writes the details of the last error to buf.
 // 
