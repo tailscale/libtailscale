@@ -1,0 +1,53 @@
+# Copyright (c) Tailscale Inc & AUTHORS
+# SPDX-License-Identifier: BSD-3-Clause
+# frozen_string_literal: true
+
+require "bundler/gem_tasks"
+require "rake/testtask"
+require "rake/extensiontask"
+
+go_sources = %w[tailscale.go go.mod go.sum]
+go_sources.map do |f|
+  to = "ext/libtailscale/#{f}"
+  from = "../#{f}"
+  file to => from do
+    cp from, to
+  end
+  task copy: to
+  task :clobber do
+    rm_f to
+  end
+end
+file "LICENSE" => "../LICENSE" do
+  cp "../LICENSE", "LICENSE"
+end
+task :clobber do
+  rm_f "LICENSE"
+end
+task copy: "LICENSE"
+task build: :copy
+
+# XXX: Rake::ExtensionTask seems to ignore prerequisites.
+# Rake::ExtensionTask.new "libtailscale" do |ext|
+#   ext.source_pattern = "*.{go,mod,sum}"
+# end
+# task "compile:libtailscale" => :copy
+libname = "lib/libtailscale.#{RbConfig::CONFIG['DLEXT']}"
+task libname => :copy do |t|
+  sh "go build -buildmode=c-shared -o #{t.name} github.com/tailscale/libtailscale"
+end
+desc "Build the C extension using local sources"
+task compile: libname
+task :clobber do
+  rm_f libname
+  rm_f libname.sub(/\.#{RbConfig::CONFIG['DLEXT']}$/, ".h")
+end
+
+Rake::TestTask.new(:test) do |t|
+  t.libs << "test"
+  t.libs << "lib"
+  t.test_files = FileList["test/**/test_*.rb"]
+end
+task test: :compile
+
+task default: :test

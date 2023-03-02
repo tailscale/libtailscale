@@ -1,0 +1,19 @@
+#!/usr/bin/env ruby
+# Copyright (c) Tailscale Inc & AUTHORS
+# SPDX-License-Identifier: BSD-3-Clause
+# frozen_string_literal: true
+
+require "bundler/setup"
+require "tailscale"
+
+t = Tailscale::new
+t.start
+
+s = t.listen "tcp", ":1997"
+while c = s.accept
+    while got = c.readpartial(2046)
+        print got
+        c.write got
+    end
+    c.close
+end
