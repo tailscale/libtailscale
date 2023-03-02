@@ -26,3 +26,7 @@ go build -buildmode=c-shared
 
 Please file any issues about this code or the hosted service on
 [the issue tracker](https://github.com/tailscale/tailscale/issues).
+
+## License
+
+BSD 3-Clause for this repository, see LICENSE.
