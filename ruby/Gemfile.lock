@@ -1,0 +1,26 @@
+PATH
+  remote: .
+  specs:
+    tailscale (0.1.0)
+      ffi (~> 1.15.5)
+
+GEM
+  remote: https://rubygems.org/
+  specs:
+    ffi (1.15.5)
+    minitest (5.16.3)
+    rake (13.0.6)
+    rake-compiler (1.2.1)
+      rake
+
+PLATFORMS
+  x86_64-linux-gnu
+
+DEPENDENCIES
+  minitest (~> 5.0)
+  rake (~> 13.0)
+  rake-compiler (~> 1.2.1)
+  tailscale!
+
+BUNDLED WITH
+   2.4.1

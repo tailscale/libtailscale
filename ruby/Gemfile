@@ -1,0 +1,12 @@
+# Copyright (c) Tailscale Inc & AUTHORS
+# SPDX-License-Identifier: BSD-3-Clause
+# frozen_string_literal: true
+
+source "https://rubygems.org"
+
+# Specify your gem's dependencies in tailscale-ruby.gemspec
+gemspec
+
+gem "rake", "~> 13.0"
+gem "rake-compiler", "~> 1.2.1"
+gem "minitest", "~> 5.0"
