@@ -1,0 +1,43 @@
+# Copyright (c) Tailscale Inc & AUTHORS
+# SPDX-License-Identifier: BSD-3-Clause
+
+prefix?=/usr/local
+libdir?=$(prefix)/lib
+includedir?=$(prefix)/include
+
+all: libtailscale.a libtailscale.so libtailscale.pc
+
+libtailscale.a:
+	go build -trimpath -buildvcs=false -buildmode=c-archive -o libtailscale.a
+
+libtailscale.so:
+	go build -trimpath -buildvcs=false -buildmode=c-shared -o libtailscale.so
+
+# TODO(raggi): the dylib build currently fails to build for amd64 on macOS on an
+# M1, the toolchain reports a build constraints error despite no build
+# constraints.
+libtailscale.dylib:
+	GOARCH=amd64 GOOS=darwin go build -trimpath -buildmode=c-shared -o libtailscale.dylib.amd64 .
+	GOARCH=arm64 GOOS=darwin go build -trimpath -buildmode=c-shared -o libtailscale.dylib.arm64 .
+	lipo -create -output libtailscale.dylib libtailscale.dylib.amd64 libtailscale.dylib.arm64
+
+libtailscale.pc:
+	echo "prefix=/usr/local" > libtailscale.pc
+	echo "exec_prefix=\$${prefix}" >> libtailscale.pc
+	echo "libdir=\$${exec_prefix}/lib" >> libtailscale.pc
+	echo "includedir=\$${prefix}/include" >> libtailscale.pc
+	echo "" >> libtailscale.pc
+	echo "Name: libtailscale" >> libtailscale.pc
+	echo "Description: Tailscale library" >> libtailscale.pc
+	echo "Version: 0.0.1" >> libtailscale.pc
+	echo "Libs: -L\$${libdir} -ltailscale" >> libtailscale.pc
+	echo "Cflags: -I\$${includedir}" >> libtailscale.pc
+
+install: libtailscale.a libtailscale.so libtailscale.pc
+	install -d $(DESTDIR)$(libdir)
+	install -m 644 libtailscale.a $(DESTDIR)$(libdir)
+	install -m 644 libtailscale.so $(DESTDIR)$(libdir)
+	install -d $(DESTDIR)$(libdir)/pkgconfig
+	install -m 644 libtailscale.pc $(DESTDIR)$(libdir)/pkgconfig
+	install -d $(DESTDIR)$(includedir)
+	install -m 644 *.h $(DESTDIR)$(includedir)

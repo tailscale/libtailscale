@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+# Copyright (c) Tailscale Inc & AUTHORS
+# SPDX-License-Identifier: BSD-3-Clause
+
+go version > /dev/null 2>&1 || { echo >&2 "A Go compiler is required."; exit 1; }
