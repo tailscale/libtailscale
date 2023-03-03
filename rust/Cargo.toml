@@ -1,0 +1,20 @@
+[package]
+name = "tsnet"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+thiserror = "1"
+
+[dependencies.tsnet-sys]
+path = "./tsnet-sys"
+
+[build-dependencies]
+bindgen = "0.53.1"
+
+[workspace]
+members = [
+  "./tsnet-sys"
+]
