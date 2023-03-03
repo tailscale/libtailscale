@@ -23,9 +23,7 @@ Gem::Specification.new do |spec|
   spec.metadata["bug_tracker_uri"] = "https://github.com/tailscale/tailscale/issues"
 
   spec.files = Dir.chdir(__dir__) do
-    `git ls-files -z`.split("\x0").reject do |f|
-      (f == __FILE__) || f.match(%r{\A(?:(?:bin|test|spec|features)/|\.(?:git|circleci)|appveyor)})
-    end
+    `git ls-files -z`.split("\x0").filter { |f| f =~ %r{^lib/|ext/|README.md|LICENSE} }
   end
   spec.files += ["LICENSE"]
   spec.files += Dir["ext/libtailscale/*.{mod,sum,go}"]

@@ -2,6 +2,7 @@ libtailscale.so
 libtailscale.a
 libtailscale.h
 /ruby/tmp/
+/ruby/pkg/
 /ruby/doc/
 /ruby/ext/libtailscale/*.go
 /ruby/ext/libtailscale/go.mod
