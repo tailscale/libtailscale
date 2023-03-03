@@ -39,6 +39,7 @@ class Tailscale
         attach_function :TsnetListenerClose, [:int], :int
         attach_function :TsnetAccept, [:int, :pointer], :int, blocking: true
         attach_function :TsnetErrmsg, [:int, :pointer, :size_t], :int
+        attach_function :TsnetLoopbackAPI, [:int, :pointer, :size_t, :pointer], :int
     end
 
     class ClosedError < StandardError
@@ -91,6 +92,72 @@ class Tailscale
             @ts.assert_open
             Error.check @ts, Libtailscale::TsnetListenerClose(@listener)
         end
+    end
+
+    # LocalAPIClient provides a Net::HTTP-alike API that can be used to make
+    # authenticated requests to the local tailscale API. For higher level use,
+    # +LocalAPI+ may be more convenient.
+    class LocalAPIClient
+        # address is the host:port address of the nodes LocalAPI server.
+        attr_reader :address
+        # credential is the basic-auth password used to authenticate requests.
+        attr_reader :credential
+
+        def initialize(addr, cred)
+            @address = addr
+            @credential = cred
+            @basic = Base64.strict_encode64(":#{cred}")
+            host, _, port = addr.rpartition(":")
+            @http = Net::HTTP.new(host, port)
+        end
+
+        def head(path, initheader = nil, &block)
+            request Net::HTTP::Head.new(path, initheader), &block
+        end
+
+        def get(path, initheader = nil, &block)
+            request Net::HTTP::Get.new(path, initheader), &block
+        end
+
+        def post(path, body = nil, initheader = nil, &block)
+            request Net::HTTP::Post.new(path, initheader), body, &block
+        end
+
+        def put(path, body = nil, initheader = nil, &block)
+            request Net::HTTP::Put.new(path, initheader), body, &block
+        end
+
+        def patch(path, body = nil, initheader = nil, &block)
+            request Net::HTTP::Patch.new(path, initheader), body, &block
+        end
+
+        def delete(path, initheader = nil, &block)
+            request Net::HTTP::Delete.new(path, initheader), &block
+        end
+
+        def request(req, body = nil, &block)
+            req["Host"] = @address
+            req["Authorization"] = "Basic #{@basic}"
+            req["Sec-Tailscale"] = "localapi"
+            @http.request(req, body, &block)
+        end
+    end
+
+    # LocalAPI provides a convenient interface for interacting with a LocalAPI given a
+    # LocalAPIClient to make requests with.
+    class LocalAPI
+
+        def initialize(client)
+            @client = client
+        end
+
+        # status returns the status of the local tailscale node.
+        def status
+            @client.get("/localapi/v0/status") do |r|
+                return JSON.parse(r.body)
+            end
+        end
+
     end
 
     # Create a new tailscale server.
@@ -174,6 +241,27 @@ class Tailscale
         listener = FFI::MemoryPointer.new(:int)
         Error.check self, Libtailscale::TsnetListen(@t, network, addr, listener)
         Listener.new self, listener.read_int
+    end
+
+    # Start a LocalAPI listener on a loopback address, and returns the address
+    # and password credential string for the instance.
+    def loopback_api
+        assert_open
+        addrbuf = FFI::MemoryPointer.new(:char, 1024)
+        credbuf = FFI::MemoryPointer.new(:char, 33)
+        Error.check self, Libtailscale::TsnetLoopbackAPI(@t, addrbuf, addrbuf.size, credbuf)
+        [addrbuf.read_string, credbuf.read_string]
+    end
+
+    # Start the local API and return a LocalAPIClient for interacting with it.
+    def local_api_client
+        addr, cred = loopback_api
+        LocalAPIClient.new(addr, cred)
+    end
+
+    # Start the local API and return a LocalAPI for interacting with it.
+    def local_api
+        LocalAPI.new(local_api_client)
     end
 
     # Get the last detailed error message from the tailscale server. This method
