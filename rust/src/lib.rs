@@ -49,6 +49,13 @@ impl Server {
         Ok(unsafe { TcpStream::from_raw_fd(conn) })
     }
 
+    #[cfg(feature = "tokio")]
+    pub fn dial_async(&self, network: &str, addr: &str) -> Result<tokio::net::TcpStream> {
+        let conn = self.dial(network, addr)?;
+        conn.set_nonblocking(true)?;
+        Ok(tokio::net::TcpStream::from_std(conn)?)
+    }
+
     pub fn listen(&self, network: &str, addr: &str) -> Result<Listener> {
         let mut ln: sys::tailscale_listener = 0;
         let network = CString::new(network)?;
@@ -76,6 +83,9 @@ pub enum Error {
 
     #[error("tsnet: {0}")]
     TSNet(String),
+
+    #[error("io error: {0}")]
+    IO(#[from] std::io::Error),
 
     #[error("your string has NULL in it: {0}")]
     NullInString(#[from] std::ffi::NulError),
@@ -182,11 +192,22 @@ impl Listener {
         let conn = conn as c_int;
         Ok(unsafe { TcpStream::from_raw_fd(conn) })
     }
+
+    pub fn incoming(&mut self) -> &Self {
+        self
+    }
 }
 
 impl Drop for Listener {
     fn drop(&mut self) {
         unsafe { sys::tailscale_listener_close(self.ln) };
+    }
+}
+
+impl Iterator for Listener {
+    type Item = Result<TcpStream>;
+    fn next(&mut self) -> Option<Result<TcpStream>> {
+        Some(self.accept())
     }
 }
 
