@@ -29,10 +29,6 @@
             rust-bindgen
             clang
             libllvm
-
-            # Ruby
-            rubyPackages_3_1.rake
-            ruby_3_1
           ];
 
           LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
