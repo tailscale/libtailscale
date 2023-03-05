@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"unsafe"
 
+	"tailscale.com/hostinfo"
 	"tailscale.com/tsnet"
 	"tailscale.com/types/logger"
 )
@@ -85,6 +86,7 @@ func TsnetNewServer() C.int {
 
 	if servers.m == nil {
 		servers.m = map[C.int]*server{}
+		hostinfo.SetApp("libtailscale")
 	}
 	if servers.next == 0 {
 		servers.next = 42<<16 + 1

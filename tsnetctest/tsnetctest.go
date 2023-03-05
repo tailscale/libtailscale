@@ -132,6 +132,7 @@ int close_conn() {
 */
 import "C"
 import (
+	"context"
 	"flag"
 	"io"
 	"net/http"
@@ -139,6 +140,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"tailscale.com/net/netns"
 	"tailscale.com/tstest/integration"
@@ -183,7 +185,12 @@ func RunTestConn(t *testing.T) {
 		t.Fatal(C.GoString(C.err))
 	}
 
-	req, err := http.NewRequest("GET", "http://"+C.GoString(C.addr)+"/localapi/v0/status", nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	localAPIStatus := "http://" + C.GoString(C.addr) + "/localapi/v0/status"
+	t.Logf("fetching local API status from %q", localAPIStatus)
+	req, err := http.NewRequestWithContext(ctx, "GET", localAPIStatus, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
