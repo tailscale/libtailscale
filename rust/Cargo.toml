@@ -19,6 +19,7 @@ features = ["net", "macros", "rt", "io-util"]
 
 [dependencies.tsnet-sys]
 path = "./tsnet-sys"
+features = ["bundled"]
 
 [build-dependencies]
 bindgen = "0.53.1"
