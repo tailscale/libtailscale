@@ -7,11 +7,11 @@ use std::{
 use tsnet::Server;
 
 fn main() {
-    let hostport = env::args().skip(1).next().unwrap();
+    let hostport = env::args().skip(1).next().expect("usage: echoserver host:port");
     let srv = Server::new()
         .hostname("tsnet-rs-echoserver")
         .ephemeral()
-        .authkey(env::var("TS_AUTHKEY").unwrap())
+        .authkey(env::var("TS_AUTHKEY").expect("set TS_AUTHKEY in environment"))
         .build()
         .unwrap();
 

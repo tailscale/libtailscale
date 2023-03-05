@@ -1,10 +1,13 @@
-use tsnet::Server;
-use std::{env};
-use tokio::io::AsyncWriteExt;        
+use std::env;
+use tokio::io::AsyncWriteExt;
 use tokio::runtime::Builder;
+use tsnet::Server;
 
 fn main() {
-    let target = env::args().skip(1).next().expect("usage: echoclient_async <host:port>");
+    let target = env::args()
+        .skip(1)
+        .next()
+        .expect("usage: echoclient_async <host:port>");
     let srv = Server::new()
         .hostname("tsnet-rs-echoclient-async")
         .ephemeral()

@@ -10,9 +10,9 @@ mod tests {
 
     #[test]
     fn open_and_close() {
-            let srv = unsafe { tailscale_new() };
+        let srv = unsafe { tailscale_new() };
         assert_eq!(unsafe { tailscale_start(srv) }, 0);
         assert_eq!(unsafe { tailscale_close(srv) }, 0);
-            drop(srv);
+        drop(srv);
     }
 }
