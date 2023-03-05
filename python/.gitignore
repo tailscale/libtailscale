@@ -1,0 +1,12 @@
+.venv/
+
+__pycache__/
+tailscale.egg-info/
+dist/
+build/
+*.whl
+
+pybind11/
+
+libtailscale.a
+libtailscale.h
