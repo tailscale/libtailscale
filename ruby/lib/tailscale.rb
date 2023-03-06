@@ -39,7 +39,7 @@ class Tailscale
         attach_function :TsnetListenerClose, [:int], :int
         attach_function :TsnetAccept, [:int, :pointer], :int, blocking: true
         attach_function :TsnetErrmsg, [:int, :pointer, :size_t], :int
-        attach_function :TsnetLoopbackAPI, [:int, :pointer, :size_t, :pointer], :int
+        attach_function :TsnetLoopback, [:int, :pointer, :size_t, :pointer, :pointer], :int
     end
 
     class ClosedError < StandardError
@@ -243,19 +243,20 @@ class Tailscale
         Listener.new self, listener.read_int
     end
 
-    # Start a LocalAPI listener on a loopback address, and returns the address
-    # and password credential string for the instance.
-    def loopback_api
+    # Start a listener on a loopback address, and returns the address
+    # and credentials for using it as LocalAPI or a proxy.
+    def loopback
         assert_open
         addrbuf = FFI::MemoryPointer.new(:char, 1024)
-        credbuf = FFI::MemoryPointer.new(:char, 33)
-        Error.check self, Libtailscale::TsnetLoopbackAPI(@t, addrbuf, addrbuf.size, credbuf)
-        [addrbuf.read_string, credbuf.read_string]
+        proxycredbuf = FFI::MemoryPointer.new(:char, 33)
+        localcredbuf = FFI::MemoryPointer.new(:char, 33)
+        Error.check self, Libtailscale::TsnetLoopback(@t, addrbuf, addrbuf.size, proxycredbuf, localcredbuf)
+        [addrbuf.read_string, proxycredbuf.read_string, localcredbuf.read_string]
     end
 
     # Start the local API and return a LocalAPIClient for interacting with it.
     def local_api_client
-        addr, cred = loopback_api
+        addr, _, cred = loopback
         LocalAPIClient.new(addr, cred)
     end
 

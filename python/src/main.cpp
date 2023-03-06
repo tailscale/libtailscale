@@ -80,7 +80,7 @@ PYBIND11_MODULE(_tailscale, m) {
 
     )pbdoc");
 
-    m.def("loopback_api", &TsnetLoopbackAPI, R"pbdoc(
+    m.def("loopback", &TsnetLoopback, R"pbdoc(
 
     )pbdoc");
 

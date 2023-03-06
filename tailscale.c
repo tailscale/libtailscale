@@ -19,7 +19,7 @@ extern int TsnetSetLogFD(int sd, int fd);
 extern int TsnetListen(int sd, char* net, char* addr, int* listenerOut);
 extern int TsnetListenerClose(int ld);
 extern int TsnetAccept(int ld, int* connOut);
-extern int TsnetLoopbackAPI(int sd, char* addrOut, size_t addrLen, char* credOut);
+extern int TsnetLoopback(int sd, char* addrOut, size_t addrLen, char* proxyOut, char* localOut);
 
 tailscale tailscale_new() {
 	return TsnetNewServer();
@@ -72,8 +72,8 @@ int tailscale_set_logfd(tailscale sd, int fd) {
 	return TsnetSetLogFD(sd, fd);
 }
 
-int tailscale_loopback_api(tailscale sd, char* addr_out, size_t addrlen, char cred_out[static 33]) {
-	return TsnetLoopbackAPI(sd, addr_out, addrlen, cred_out);
+int tailscale_loopback(tailscale sd, char* addr_out, size_t addrlen, char proxy_cred_out[static 33], char local_api_cred_out[static 33]) {
+	return TsnetLoopback(sd, addr_out, addrlen, proxy_cred_out, local_api_cred_out);
 }
 
 int tailscale_errmsg(tailscale sd, char* buf, size_t buflen) {
