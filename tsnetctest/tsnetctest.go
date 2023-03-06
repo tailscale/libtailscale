@@ -19,7 +19,8 @@ char* control_url = 0;
 
 int addrlen = 128;
 char* addr = NULL;
-char* cred = NULL;
+char* proxy_cred = NULL;
+char* local_api_cred = NULL;
 
 int errlen = 512;
 char* err = NULL;
@@ -37,7 +38,8 @@ int set_err(tailscale sd, char tag) {
 int test_conn() {
 	err = calloc(errlen, 1);
 	addr = calloc(addrlen, 1);
-	cred = calloc(33, 1);
+	proxy_cred = calloc(33, 1);
+	local_api_cred = calloc(33, 1);
 	int ret;
 
 	s1 = tailscale_new();
@@ -111,7 +113,7 @@ int test_conn() {
 		return set_err(s1, 'a');
 	}
 
-	if ((ret = tailscale_loopback_api(s1, addr, addrlen, cred)) != 0) {
+	if ((ret = tailscale_loopback(s1, addr, addrlen, proxy_cred, local_api_cred)) != 0) {
 		return set_err(s1, 'b');
 	}
 
@@ -186,7 +188,7 @@ func RunTestConn(t *testing.T) {
 		t.Fatal(err)
 	}
 	req.Header.Set("Sec-Tailscale", "localapi")
-	req.SetBasicAuth("", C.GoString(C.cred))
+	req.SetBasicAuth("", C.GoString(C.local_api_cred))
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)

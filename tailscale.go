@@ -363,8 +363,8 @@ func TsnetSetLogFD(sd C.int, fd int) C.int {
 	return 0
 }
 
-//export TsnetLoopbackAPI
-func TsnetLoopbackAPI(sd C.int, addrOut *C.char, addrLen C.size_t, credOut *C.char) C.int {
+//export TsnetLoopback
+func TsnetLoopback(sd C.int, addrOut *C.char, addrLen C.size_t, proxyOut *C.char, localOut *C.char) C.int {
 	// Panic here to ensure we always leave the out values NUL-terminated.
 	if addrOut == nil {
 		panic("loopback_api passed nil addr_out")
@@ -374,18 +374,22 @@ func TsnetLoopbackAPI(sd C.int, addrOut *C.char, addrLen C.size_t, credOut *C.ch
 
 	// Start out NUL-termianted to cover error conditions.
 	*addrOut = '\x00'
-	*credOut = '\x00'
+	*localOut = '\x00'
+	*proxyOut = '\x00'
 
 	s, err := getServer(sd)
 	if err != nil {
 		return s.recErr(err)
 	}
-	addr, cred, err := s.s.LoopbackLocalAPI()
+	addr, proxyCred, localAPICred, err := s.s.Loopback()
 	if err != nil {
 		return s.recErr(err)
 	}
-	if len(cred) != 32 {
-		return s.recErr(fmt.Errorf("libtailscale: len(cred)=%d, want 32", len(cred)))
+	if len(proxyCred) != 32 {
+		return s.recErr(fmt.Errorf("libtailscale: len(proxyCred)=%d, want 32", len(proxyCred)))
+	}
+	if len(localAPICred) != 32 {
+		return s.recErr(fmt.Errorf("libtailscale: len(localAPICred)=%d, want 32", len(localAPICred)))
 	}
 	if len(addr)+1 > int(addrLen) {
 		return s.recErr(fmt.Errorf("libtailscale: loopback addr of %d bytes is too long for addrlen %d", len(addr), addrLen))
@@ -394,10 +398,13 @@ func TsnetLoopbackAPI(sd C.int, addrOut *C.char, addrLen C.size_t, credOut *C.ch
 	n := copy(out, addr)
 	out[n] = '\x00'
 
-	// credOut is non-nil and 33 bytes long because
-	// it's defined in C as char cred_out[static 33].
-	out = unsafe.Slice((*byte)(unsafe.Pointer(credOut)), 33)
-	copy(out, cred)
+	// proxyOut and localOut are non-nil and 33 bytes long because
+	// they are defined in C as char cred_out[static 33].
+	out = unsafe.Slice((*byte)(unsafe.Pointer(proxyOut)), 33)
+	copy(out, proxyCred)
+	out[32] = '\x00'
+	out = unsafe.Slice((*byte)(unsafe.Pointer(localOut)), 33)
+	copy(out, localAPICred)
 	out[32] = '\x00'
 
 	return 0

@@ -118,17 +118,21 @@ extern int tailscale_listener_close(tailscale_listener listener);
 // 	-1    - call tailscale_errmsg for details
 extern int tailscale_accept(tailscale_listener listener, tailscale_conn* conn_out);
 
-// tailscale_loopback_api starts a LocalAPI listener on a loopback address.
+// tailscale_loopback starts a loopback address server.
 //
-// To make http requests to the LocalAPI:
-// 	1. cred must be provided as the basic auth password
-// 	2. the header "Sec-Tailscale: localapi" must be set
+// The server has multiple functions.
 //
-// The NUL-terminated ip:port address of the LocalAPI is written to addr_out.
-// The 32-byte basic auth password + NUL-terminator is written to cred_out.
+// It can be used as a SOCKS5 proxy onto the tailnet.
+// Authentication is required with the username "tsnet" and
+// the value of proxy_cred used as the password.
+//
+// The HTTP server also serves out the "LocalAPI" on /localapi.
+// As the LocalAPI is powerful, access to endpoints requires BOTH passing a
+// "Sec-Tailscale: localapi" HTTP header and passing local_api_cred as
+// the basic auth password.
 //
 // Returns zero on success or -1 on error, call tailscale_errmsg for details.
-extern int tailscale_loopback_api(tailscale sd, char* addr_out, size_t addrlen, char cred_out[static 33]);
+extern int tailscale_loopback(tailscale sd, char* addr_out, size_t addrlen, char proxy_cred_out[static 33], char local_api_cred_out[static 33]);
 
 // tailscale_errmsg writes the details of the last error to buf.
 // 
