@@ -349,7 +349,7 @@ func TsnetSetEphemeral(sd C.int, e int) C.int {
 }
 
 //export TsnetSetLogFD
-func TsnetSetLogFD(sd C.int, fd int) C.int {
+func TsnetSetLogFD(sd, fd C.int) C.int {
 	s, err := getServer(sd)
 	if err != nil {
 		return s.recErr(err)
