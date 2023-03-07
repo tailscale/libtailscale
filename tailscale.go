@@ -10,9 +10,11 @@ import "C"
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"unsafe"
 
@@ -224,8 +226,13 @@ func newConn(s *server, netConn net.Conn, connOut *C.int) C.int {
 	conns.m[fdC] = c
 	conns.mu.Unlock()
 
+	var doneOnce atomic.Bool
 	connCleanup := func() {
+		if !doneOnce.Swap(true) {
+			return
+		}
 		r.Close()
+		netConn.Close()
 
 		conns.mu.Lock()
 		delete(conns.m, fdC)
@@ -234,27 +241,19 @@ func newConn(s *server, netConn net.Conn, connOut *C.int) C.int {
 	go func() {
 		defer connCleanup()
 		var b [1 << 16]byte
-		for {
-			n, err := netConn.Read(b[:])
-			if err != nil {
-				return
-			}
-			if _, err := r.Write(b[:n]); err != nil {
-				return
-			}
+		io.CopyBuffer(r, netConn, b[:])
+		syscall.Shutdown(int(r.Fd()), syscall.SHUT_WR)
+		if cr, ok := netConn.(interface{ CloseRead() error }); ok {
+			cr.CloseRead()
 		}
 	}()
 	go func() {
 		defer connCleanup()
 		var b [1 << 16]byte
-		for {
-			n, err := r.Read(b[:])
-			if err != nil {
-				return
-			}
-			if _, err := netConn.Write(b[:n]); err != nil {
-				return
-			}
+		io.CopyBuffer(netConn, r, b[:])
+		syscall.Shutdown(int(r.Fd()), syscall.SHUT_RD)
+		if cw, ok := netConn.(interface{ CloseWrite() error }); ok {
+			cw.CloseWrite()
 		}
 	}()
 
