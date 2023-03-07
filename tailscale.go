@@ -65,9 +65,9 @@ var conns struct {
 }
 
 type conn struct {
-	s    *tsnet.Server
-	c    net.Conn
-	r, w *os.File // the r side is held by Go, w is given to C
+	s *tsnet.Server
+	c net.Conn
+	r *os.File // r is the local socket to the C client
 }
 
 func (s *server) recErr(err error) C.int {
@@ -213,9 +213,8 @@ func newConn(s *server, netConn net.Conn, connOut *C.int) C.int {
 	if err != nil {
 		return s.recErr(err)
 	}
-	w := os.NewFile(uintptr(fds[0]), "socketpair-w")
 	r := os.NewFile(uintptr(fds[1]), "socketpair-r")
-	c := &conn{s: s.s, c: netConn, r: r, w: w}
+	c := &conn{s: s.s, c: netConn, r: r}
 	fdC := C.int(fds[0])
 
 	conns.mu.Lock()
@@ -227,7 +226,6 @@ func newConn(s *server, netConn net.Conn, connOut *C.int) C.int {
 
 	connCleanup := func() {
 		r.Close()
-		w.Close()
 
 		conns.mu.Lock()
 		delete(conns.m, fdC)
