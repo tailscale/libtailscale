@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
+int err(tailscale ts);
 int main(void) {
 	int ret;
 
