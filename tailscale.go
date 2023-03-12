@@ -121,18 +121,21 @@ func TsnetUp(sd C.int) C.int {
 
 //export TsnetClose
 func TsnetClose(sd C.int) C.int {
-	s, err := getServer(sd)
-	if err != nil {
-		return s.recErr(err)
-	}
-
 	servers.mu.Lock()
-	delete(servers.m, sd)
+	s := servers.m[sd]
+	if s != nil {
+		delete(servers.m, sd)
+	}
 	servers.mu.Unlock()
+
+	if s == nil {
+		return C.EBADF
+	}
 
 	// TODO: cancel Up
 	// TODO: close related listeners / conns.
 	if err := s.s.Close(); err != nil {
+		s.s.Logf("tailscale_close: failed with %v", err)
 		return -1
 	}
 
