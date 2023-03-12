@@ -87,8 +87,12 @@ extern int tailscale_dial(tailscale sd, const char* network, const char* addr, t
 // A tailscale_listener is a socket on the tailnet listening for connections.
 //
 // It is much like allocating a system socket(2) and calling listen(2).
-// Because it is not a system socket, operate on it using the functions
-// tailscale_accept and tailscale_listener_close.
+// Accept connections with tailscale_accept and close the listener  with close.
+//
+// Under the hood, a tailscale_listener is one half of a socketpair itself,
+// used to move the connection fd from Go to C. This means you can use epoll
+// or its equivalent on a tailscale_listener to know if there is a connection
+// read to accept.
 typedef int tailscale_listener;
 
 // tailscale_listen listens for a connection on the tailnet.
@@ -103,14 +107,6 @@ typedef int tailscale_listener;
 //
 // Returns zero on success or -1 on error, call tailscale_errmsg for details.
 extern int tailscale_listen(tailscale sd, const char* network, const char* addr, tailscale_listener* listener_out);
-
-// tailscale_listener_close closes the listener.
-//
-// Returns:
-// 	0     - success
-// 	EBADF - listener is not a valid tailscale_listener
-// 	-1    - call tailscale_errmsg for details
-extern int tailscale_listener_close(tailscale_listener listener);
 
 // tailscale_accept accepts a connection on a tailscale_listener.
 //
