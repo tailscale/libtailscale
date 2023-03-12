@@ -201,6 +201,9 @@ func TsnetListenerClose(ld C.int) C.int {
 	defer listeners.mu.Unlock()
 
 	l := listeners.m[ld]
+	if l == nil {
+		return C.EBADF
+	}
 	err := l.ln.Close()
 	delete(listeners.m, ld)
 
