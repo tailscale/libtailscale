@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tailscale.h"
+#include <sys/socket.h>
+#include <stdio.h>
+#include <unistd.h>
 
 // Functions exported by Go.
 extern int TsnetNewServer();
@@ -17,8 +20,6 @@ extern int TsnetSetControlURL(int sd, char* str);
 extern int TsnetSetEphemeral(int sd, int ephemeral);
 extern int TsnetSetLogFD(int sd, int fd);
 extern int TsnetListen(int sd, char* net, char* addr, int* listenerOut);
-extern int TsnetListenerClose(int ld);
-extern int TsnetAccept(int ld, int* connOut);
 extern int TsnetLoopback(int sd, char* addrOut, size_t addrLen, char* proxyOut, char* localOut);
 
 tailscale tailscale_new() {
@@ -45,12 +46,28 @@ int tailscale_listen(tailscale sd, const char* network, const char* addr, tailsc
 	return TsnetListen(sd, (char*)network, (char*)addr, (int*)listener_out);
 }
 
-int tailscale_listener_close(tailscale_listener ld) {
-	return TsnetListenerClose(ld);
-}
-
 int tailscale_accept(tailscale_listener ld, tailscale_conn* conn_out) {
-	return TsnetAccept(ld, (int*)conn_out);
+	struct msghdr msg = {0};
+
+	char mbuf[256];
+	struct iovec io = { .iov_base = mbuf, .iov_len = sizeof(mbuf) };
+	msg.msg_iov = &io;
+	msg.msg_iovlen = 1;
+
+	char cbuf[256];
+	msg.msg_control = cbuf;
+	msg.msg_controllen = sizeof(cbuf);
+
+	if (recvmsg(ld, &msg, 0) == -1) {
+		return -1;
+	}
+
+	struct cmsghdr* cmsg = CMSG_FIRSTHDR(&msg);
+	unsigned char* data = CMSG_DATA(cmsg);
+
+	int fd = *(int*)data;
+	*conn_out = fd;
+	return 0;
 }
 
 int tailscale_set_dir(tailscale sd, const char* dir) {

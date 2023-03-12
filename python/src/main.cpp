@@ -44,10 +44,6 @@ PYBIND11_MODULE(_tailscale, m) {
         Listen on a given protocol and port
     )pbdoc");
 
-    m.def("close_listener", &TsnetListenerClose, R"pbdoc(
-        Create a new tsnet server
-    )pbdoc");
-
     m.def("accept", [](int ld) { int connOut; int rv = TsnetAccept(ld, &connOut); return std::make_tuple(connOut, rv);}, R"pbdoc(
         Accept a given listener and connection
     )pbdoc");

@@ -14,7 +14,6 @@ import (
 	"net"
 	"os"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"unsafe"
 
@@ -50,14 +49,14 @@ func getServer(sd C.int) (*server, error) {
 
 // listeners tracks all the tsnet_listener objects allocated via tsnet_listen.
 var listeners struct {
-	mu   sync.Mutex
-	next C.int
-	m    map[C.int]*listener
+	mu sync.Mutex
+	m  map[C.int]*listener
 }
 
 type listener struct {
 	s  *server
 	ln net.Listener
+	fd int // go side fd of socketpair sent to C
 }
 
 // conns tracks all the pipe(2)s allocated via tsnet_dial.
@@ -180,46 +179,85 @@ func TsnetListen(sd C.int, network, addr *C.char, listenerOut *C.int) C.int {
 		return s.recErr(err)
 	}
 
-	listeners.mu.Lock()
-	if listeners.next == 0 {
-		// Arbitrary magic number that will hopefully help someone
-		// debug some type confusion one day.
-		listeners.next = 37<<16 + 1
-	}
-	if listeners.m == nil {
-		listeners.m = map[C.int]*listener{}
-	}
-	ld := listeners.next
-	listeners.next++
-	listeners.m[ld] = &listener{s: s, ln: ln}
-	listeners.mu.Unlock()
-
-	*listenerOut = ld
-	return 0
-}
-
-//export TsnetListenerClose
-func TsnetListenerClose(ld C.int) C.int {
-	listeners.mu.Lock()
-	defer listeners.mu.Unlock()
-
-	l := listeners.m[ld]
-	if l == nil {
-		return C.EBADF
-	}
-	err := l.ln.Close()
-	delete(listeners.m, ld)
-
-	if err != nil {
-		return l.s.recErr(err)
-	}
-	return 0
-}
-
-func newConn(s *server, netConn net.Conn, connOut *C.int) C.int {
+	// The tailscale_listener we return to C is one side of a socketpair(2).
+	// We do this so we can proactively call ln.Accept in a goroutine and
+	// feed an fd for the connection through the listener. This lets C use
+	// epoll on the tailscale_listener to know if it should call
+	// tailscale_accept, which avoids a blocking call on the far side.
 	fds, err := syscall.Socketpair(syscall.AF_LOCAL, syscall.SOCK_STREAM, 0)
 	if err != nil {
 		return s.recErr(err)
+	}
+	sp := fds[1]
+	fdC := C.int(fds[0])
+
+	listeners.mu.Lock()
+	if listeners.m == nil {
+		listeners.m = map[C.int]*listener{}
+	}
+	listeners.m[fdC] = &listener{s: s, ln: ln, fd: sp}
+	listeners.mu.Unlock()
+
+	cleanup := func() {
+		// If fdC is closed on the C side, then we end up calling
+		// into cleanup twice. Be careful to avoid syscall.Close
+		// twice as the FD may have been reallocated.
+		listeners.mu.Lock()
+		if tsLn, ok := listeners.m[fdC]; ok && tsLn.ln == ln {
+			delete(listeners.m, fdC)
+			syscall.Close(sp)
+		}
+		listeners.mu.Unlock()
+
+		ln.Close()
+	}
+	go func() {
+		// fdC is never written to, so trying to read from sp blocks
+		// until fdC is closed. We use this as a signal that C is
+		// done with the listener, and we can tear it down.
+		//
+		// TODO: would using os.NewFile avoid a locked up thread?
+		var buf [256]byte
+		syscall.Read(sp, buf[:])
+		cleanup()
+	}()
+	go func() {
+		defer cleanup()
+		for {
+			netConn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			var connFd C.int
+			if err := newConn(s, netConn, &connFd); err != nil {
+				if s.s.Logf != nil {
+					s.s.Logf("libtailscale.accept: newConn: %v", err)
+				}
+				netConn.Close()
+				continue
+			}
+			rights := syscall.UnixRights(int(connFd))
+			err = syscall.Sendmsg(sp, nil, rights, nil, 0)
+			if err != nil {
+				// We handle sp being closed in the read goroutine above.
+				if s.s.Logf != nil {
+					s.s.Logf("libtailscale.accept: sendmsg failed: %v", err)
+				}
+				netConn.Close()
+				// fallthrough to close connFd, then continue Accept()ing
+			}
+			syscall.Close(int(connFd)) // now owned by recvmsg
+		}
+	}()
+
+	*listenerOut = fdC
+	return 0
+}
+
+func newConn(s *server, netConn net.Conn, connOut *C.int) error {
+	fds, err := syscall.Socketpair(syscall.AF_LOCAL, syscall.SOCK_STREAM, 0)
+	if err != nil {
+		return err
 	}
 	r := os.NewFile(uintptr(fds[1]), "socketpair-r")
 	c := &conn{s: s.s, c: netConn, r: r}
@@ -232,17 +270,21 @@ func newConn(s *server, netConn net.Conn, connOut *C.int) C.int {
 	conns.m[fdC] = c
 	conns.mu.Unlock()
 
-	var doneOnce atomic.Bool
 	connCleanup := func() {
-		if !doneOnce.Swap(true) {
+		var inCleanup bool
+		conns.mu.Lock()
+		if tsConn, ok := conns.m[fdC]; ok && tsConn.c == netConn {
+			delete(conns.m, fdC)
+			inCleanup = true
+		}
+		conns.mu.Unlock()
+
+		if !inCleanup {
 			return
 		}
+
 		r.Close()
 		netConn.Close()
-
-		conns.mu.Lock()
-		delete(conns.m, fdC)
-		conns.mu.Unlock()
 	}
 	go func() {
 		defer connCleanup()
@@ -264,24 +306,7 @@ func newConn(s *server, netConn net.Conn, connOut *C.int) C.int {
 	}()
 
 	*connOut = fdC
-	return 0
-}
-
-//export TsnetAccept
-func TsnetAccept(ld C.int, connOut *C.int) C.int {
-	listeners.mu.Lock()
-	l := listeners.m[ld]
-	listeners.mu.Unlock()
-
-	if l == nil {
-		return C.EBADF
-	}
-
-	netConn, err := l.ln.Accept()
-	if err != nil {
-		return l.s.recErr(err)
-	}
-	return newConn(l.s, netConn, connOut)
+	return nil
 }
 
 //export TsnetDial
@@ -294,7 +319,10 @@ func TsnetDial(sd C.int, network, addr *C.char, connOut *C.int) C.int {
 	if err != nil {
 		return s.recErr(err)
 	}
-	return newConn(s, netConn, connOut)
+	if newConn(s, netConn, connOut); err != nil {
+		return s.recErr(err)
+	}
+	return 0
 }
 
 //export TsnetSetDir

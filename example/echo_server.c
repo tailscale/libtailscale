@@ -46,7 +46,7 @@ int main(void) {
 		}
 		close(conn);
 	}
-	tailscale_listener_close(ln);
+	close(ln);
 	tailscale_close(ts);
 
 	return 0;
