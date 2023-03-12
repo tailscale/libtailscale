@@ -41,7 +41,10 @@ extern int tailscale_up(tailscale sd);
 
 // tailscale_close shuts down the server.
 //
-// Returns zero on success or -1 on error. No error details are available.
+// Returns:
+// 	0     - success
+// 	EBADF - sd is not a valid tailscale
+// 	-1    - other error, details printed to the tsnet logger
 extern int tailscale_close(tailscale sd);
 
 // The following set tailscale configuration options.
