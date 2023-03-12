@@ -103,7 +103,10 @@ extern int tailscale_listen(tailscale sd, const char* network, const char* addr,
 
 // tailscale_listener_close closes the listener.
 //
-// Returns zero on success or -1 on error, call tailscale_errmsg for details.
+// Returns:
+// 	0     - success
+// 	EBADF - listener is not a valid tailscale_listener
+// 	-1    - call tailscale_errmsg for details
 extern int tailscale_listener_close(tailscale_listener listener);
 
 // tailscale_accept accepts a connection on a tailscale_listener.
