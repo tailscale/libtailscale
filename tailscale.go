@@ -50,14 +50,14 @@ func getServer(sd C.int) (*server, error) {
 
 // listeners tracks all the tsnet_listener objects allocated via tsnet_listen.
 var listeners struct {
-	mu   sync.Mutex
-	next C.int
-	m    map[C.int]*listener
+	mu sync.Mutex
+	m  map[C.int]*listener
 }
 
 type listener struct {
 	s  *server
 	ln net.Listener
+	fd int // go side fd of socketpair sent to C
 }
 
 // conns tracks all the pipe(2)s allocated via tsnet_dial.
@@ -180,39 +180,64 @@ func TsnetListen(sd C.int, network, addr *C.char, listenerOut *C.int) C.int {
 		return s.recErr(err)
 	}
 
-	listeners.mu.Lock()
-	if listeners.next == 0 {
-		// Arbitrary magic number that will hopefully help someone
-		// debug some type confusion one day.
-		listeners.next = 37<<16 + 1
+	// The tailscale_listener we return to C is one side of a socketpair(2).
+	// We do this so we can proactively call ln.Accept in a goroutine and
+	// feed an fd for the connection through the listener. This lets C use
+	// epoll on the tailscale_listener to know if it should call
+	// tailscale_accept, which avoids a blocking call on the far side.
+	fds, err := syscall.Socketpair(syscall.AF_LOCAL, syscall.SOCK_STREAM, 0)
+	if err != nil {
+		return s.recErr(err)
 	}
+	sp := fds[1]
+	fdC := C.int(fds[0])
+
+	listeners.mu.Lock()
 	if listeners.m == nil {
 		listeners.m = map[C.int]*listener{}
 	}
-	ld := listeners.next
-	listeners.next++
-	listeners.m[ld] = &listener{s: s, ln: ln}
+	listeners.m[fdC] = &listener{s: s, ln: ln, fd: sp}
 	listeners.mu.Unlock()
 
-	*listenerOut = ld
-	return 0
-}
+	cleanup := func() {
+		listeners.mu.Lock()
+		delete(listeners.m, fdC)
+		listeners.mu.Unlock()
 
-//export TsnetListenerClose
-func TsnetListenerClose(ld C.int) C.int {
-	listeners.mu.Lock()
-	defer listeners.mu.Unlock()
-
-	l := listeners.m[ld]
-	if l == nil {
-		return C.EBADF
+		syscall.Close(sp)
+		ln.Close()
 	}
-	err := l.ln.Close()
-	delete(listeners.m, ld)
+	go func() {
+		defer cleanup()
+		for {
+			netConn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			var connFd C.int
+			if ret := newConn(s, netConn, &connFd); ret != 0 {
+				if s.s.Logf != nil {
+					// TODO
+					s.s.Logf("------ libtailscale.accept goroutine: newConn returned non-zero: %d", ret)
+				}
+				netConn.Close()
+				continue
+			}
+			rights := syscall.UnixRights(int(connFd))
+			err = syscall.Sendmsg(sp, nil, rights, nil, 0)
+			if err != nil {
+				if s.s.Logf != nil {
+					// TODO
+					s.s.Logf("------ libtailscale.accept goroutine: listener sendmsg failed: %v", err)
+				}
+				netConn.Close()
+				continue
+			}
+			syscall.Close(int(connFd)) // now owned by recvmsg
+		}
+	}()
 
-	if err != nil {
-		return l.s.recErr(err)
-	}
+	*listenerOut = fdC
 	return 0
 }
 
@@ -265,23 +290,6 @@ func newConn(s *server, netConn net.Conn, connOut *C.int) C.int {
 
 	*connOut = fdC
 	return 0
-}
-
-//export TsnetAccept
-func TsnetAccept(ld C.int, connOut *C.int) C.int {
-	listeners.mu.Lock()
-	l := listeners.m[ld]
-	listeners.mu.Unlock()
-
-	if l == nil {
-		return C.EBADF
-	}
-
-	netConn, err := l.ln.Accept()
-	if err != nil {
-		return l.s.recErr(err)
-	}
-	return newConn(l.s, netConn, connOut)
 }
 
 //export TsnetDial
