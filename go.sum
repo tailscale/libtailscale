@@ -320,5 +320,5 @@ inet.af/wf v0.0.0-20220728202103-50d96caab2f6/go.mod h1:bSAQ38BYbY68uwpasXOTZo22
 nhooyr.io/websocket v1.8.7 h1:usjR2uOr/zjjkVMy0lW+PPohFok7PCow5sDjLgX4P4g=
 nhooyr.io/websocket v1.8.7/go.mod h1:B70DZP8IakI65RVQ51MsWP/8jndNma26DVA/nFSCgW0=
 software.sslmate.com/src/go-pkcs12 v0.2.0 h1:nlFkj7bTysH6VkC4fGphtjXRbezREPgrHuJG20hBGPE=
-tailscale.com v1.1.1-0.20230308002955-48f6c1eba4e2 h1:FI2GLXZk6hoe2V7CP5dA0mY2WPrg+BneIu1Mvnf7JHw=
-tailscale.com v1.1.1-0.20230308002955-48f6c1eba4e2/go.mod h1:UWLQxcd8dz+lds2I+HpfXSruHrvXM1j4zd4zdx86t7w=
+tailscale.com v1.1.1-0.20230314035052-b4d3e2928b6b h1:R0UUvmc/XNWKFYP525DU01Sb7hVIOvFZxm1ptbPwOkA=
+tailscale.com v1.1.1-0.20230314035052-b4d3e2928b6b/go.mod h1:UWLQxcd8dz+lds2I+HpfXSruHrvXM1j4zd4zdx86t7w=
