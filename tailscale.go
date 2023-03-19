@@ -403,6 +403,10 @@ func TsnetLoopback(sd C.int, addrOut *C.char, addrLen C.size_t, proxyOut *C.char
 		panic("loopback_api passed nil addr_out")
 	} else if addrLen == 0 {
 		panic("loopback_api passed addrlen of 0")
+	} else if proxyOut == nil {
+		panic("loopback_api passed nil proxy_cred_out")
+	} else if localOut == nil {
+		panic("loopback_api passed nil local_api_cred_out")
 	}
 
 	// Start out NUL-termianted to cover error conditions.

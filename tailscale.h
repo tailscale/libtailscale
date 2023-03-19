@@ -14,6 +14,14 @@
 
 #include <stddef.h>
 
+#ifndef TAILSCALE_H
+#define TAILSCALE_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 // tailscale is a handle onto a Tailscale server.
 typedef int tailscale;
 
@@ -133,8 +141,15 @@ extern int tailscale_accept(tailscale_listener listener, tailscale_conn* conn_ou
 // "Sec-Tailscale: localapi" HTTP header and passing local_api_cred as
 // the basic auth password.
 //
+// The pointers proxy_cred_out and local_api_cred_out must be non-NIL
+// and point to arrays that can hold 33 bytes. The first 32 bytes are
+// the credential and the final byte is a NUL terminator.
+//
+// If tailscale_loopback returns, then addr_our, proxy_cred_out,
+// and local_api_cred_out are all NUL-terminated.
+//
 // Returns zero on success or -1 on error, call tailscale_errmsg for details.
-extern int tailscale_loopback(tailscale sd, char* addr_out, size_t addrlen, char proxy_cred_out[static 33], char local_api_cred_out[static 33]);
+extern int tailscale_loopback(tailscale sd, char* addr_out, size_t addrlen, char* proxy_cred_out, char* local_api_cred_out);
 
 // tailscale_errmsg writes the details of the last error to buf.
 // 
@@ -145,3 +160,10 @@ extern int tailscale_loopback(tailscale sd, char* addr_out, size_t addrlen, char
 // 	EBADF  - sd is not a valid tailscale
 // 	ERANGE - insufficient storage for buf
 extern int tailscale_errmsg(tailscale sd, char* buf, size_t buflen);
+
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
