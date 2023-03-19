@@ -89,7 +89,7 @@ int tailscale_set_logfd(tailscale sd, int fd) {
 	return TsnetSetLogFD(sd, fd);
 }
 
-int tailscale_loopback(tailscale sd, char* addr_out, size_t addrlen, char proxy_cred_out[static 33], char local_api_cred_out[static 33]) {
+int tailscale_loopback(tailscale sd, char* addr_out, size_t addrlen, char* proxy_cred_out, char* local_api_cred_out) {
 	return TsnetLoopback(sd, addr_out, addrlen, proxy_cred_out, local_api_cred_out);
 }
 
