@@ -109,8 +109,12 @@ int test_conn() {
 		snprintf(err, errlen, "failed to close r: %d (%s)", errno, strerror(errno));
 		return 1;
 	}
-	if ((ret = tailscale_listener_close(ln)) != 0) {
+	if ((ret = close(ln)) != 0) {
 		return set_err(s1, 'a');
+	}
+	if ((ret = close(ln)) == 0 || errno != EBADF) {
+		snprintf(err, errlen, "double tailscale_listener close = %d (errno %d: %s), want EBADF", ret, errno, strerror(errno));
+		return 1;
 	}
 
 	if ((ret = tailscale_loopback(s1, addr, addrlen, proxy_cred, local_api_cred)) != 0) {

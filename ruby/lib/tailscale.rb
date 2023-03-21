@@ -36,8 +36,8 @@ class Tailscale
         attach_function :TsnetSetLogFD, [:int, :int], :int
         attach_function :TsnetDial, [:int, :string, :string, :pointer], :int, blocking: true
         attach_function :TsnetListen, [:int, :string, :string, :pointer], :int
-        attach_function :TsnetListenerClose, [:int], :int
-        attach_function :TsnetAccept, [:int, :pointer], :int, blocking: true
+        attach_function :close, [:int], :int
+        attach_function :tailscale_accept, [:int, :pointer], :int, blocking: true
         attach_function :TsnetErrmsg, [:int, :pointer, :size_t], :int
         attach_function :TsnetLoopback, [:int, :pointer, :size_t, :pointer, :pointer], :int
     end
@@ -90,7 +90,7 @@ class Tailscale
         # Close the listener.
         def close
             @ts.assert_open
-            Error.check @ts, Libtailscale::TsnetListenerClose(@listener)
+            Error.check @ts, Libtailscale::close(@listener)
         end
     end
 

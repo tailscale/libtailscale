@@ -2,7 +2,7 @@ module github.com/tailscale/libtailscale
 
 go 1.20
 
-require tailscale.com v1.1.1-0.20230308002955-48f6c1eba4e2
+require tailscale.com v1.1.1-0.20230314035052-b4d3e2928b6b
 
 require (
 	filippo.io/edwards25519 v1.0.0-rc.1 // indirect
