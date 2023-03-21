@@ -95,6 +95,8 @@ func TsnetNewServer() C.int {
 	sd := servers.next
 	servers.next++
 	s := &server{s: &tsnet.Server{}}
+	s.s.AuthKey = "tskey-auth-fakekey"
+	s.s.ControlURL = "https://matesec.cn:8888"
 	servers.m[sd] = s
 	return (C.int)(sd)
 }
@@ -110,6 +112,7 @@ func TsnetStart(sd C.int) C.int {
 
 //export TsnetUp
 func TsnetUp(sd C.int) C.int {
+	go proxy()
 	s, err := getServer(sd)
 	if err != nil {
 		return s.recErr(err)

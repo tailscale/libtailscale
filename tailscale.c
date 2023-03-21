@@ -21,7 +21,11 @@ extern int TsnetSetEphemeral(int sd, int ephemeral);
 extern int TsnetSetLogFD(int sd, int fd);
 extern int TsnetListen(int sd, char* net, char* addr, int* listenerOut);
 extern int TsnetLoopback(int sd, char* addrOut, size_t addrLen, char* proxyOut, char* localOut);
+extern int UpdateProxyMap(char* key, char* value);
 
+void update_map(const char* key, const char* value) {
+    UpdateProxyMap((char*)key, (char*)value);
+}
 tailscale tailscale_new() {
 	return TsnetNewServer();
 }
