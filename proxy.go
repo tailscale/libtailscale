@@ -3,6 +3,7 @@ package main
 import (
 	"C"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -16,11 +17,7 @@ func proxy() {
 	}
 }
 
-var proxyMap = map[string]string{
-	"login.matesec.cn":   "http://100.64.0.5",
-	"file.matesec.cn":    "http://100.64.0.3",
-	"openwrt.matesec.cn": "http://100.122.189.12",
-}
+var proxyMap = map[string]string{}
 
 //export UpdateProxyMap
 func UpdateProxyMap(key *C.char, value *C.char) {
@@ -30,10 +27,13 @@ func UpdateProxyMap(key *C.char, value *C.char) {
 func handleRequest(w http.ResponseWriter, r *http.Request) {
 	var targetURL string
 
-	if val, ok := proxyMap[r.Host]; ok {
+	host, _, _ := net.SplitHostPort(r.Host)
+	if val, ok := proxyMap[host]; ok {
 		targetURL = val
 	} else {
-		targetURL = "http://100.64.0.5"
+		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprint(w, "custom 404")
+		return
 	}
 	target, err := url.Parse(targetURL)
 	if err != nil {
