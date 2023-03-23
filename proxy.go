@@ -8,6 +8,12 @@ import (
 	"net/http/httputil"
 	"net/url"
 )
+import (
+	"context"
+	"unsafe"
+
+	"tailscale.com/client/tailscale"
+)
 
 func proxy() {
 	http.HandleFunc("/", handleRequest)
@@ -54,4 +60,32 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 
 	// Note that ServeHttp is non blocking and uses a go routine under the hood
 	proxy.ServeHTTP(w, r)
+}
+
+//export TsnetIPAddr
+func TsnetIPAddr(addrOut *C.char, addrLen C.size_t) C.int {
+	// Panic here to ensure we always leave the out values NUL-terminated.
+	if addrOut == nil {
+		panic("loopback_api passed nil addr_out")
+	} else if addrLen == 0 {
+		panic("loopback_api passed addrlen of 0")
+	}
+
+	// Start out NUL-termianted to cover error conditions.
+	*addrOut = '\x00'
+
+	status, _ := tailscale.Status(context.Background())
+	for _, ip := range status.TailscaleIPs {
+		if ip.Is4() {
+			addr := ip.String()
+			if len(addr)+1 > int(addrLen) {
+				fmt.Printf("libtailscale: loopback addr of %d bytes is too long for addrlen %d", len(addr), addrLen)
+			}
+			out := unsafe.Slice((*byte)(unsafe.Pointer(addrOut)), addrLen)
+			n := copy(out, addr)
+			out[n] = '\x00'
+			return 0
+		}
+	}
+	return 0
 }

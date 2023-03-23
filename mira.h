@@ -5,8 +5,11 @@
 extern "C" {
 #endif
 
-extern void update_map(const char* key, const char* value);
 extern int mira_start(void);
+extern void update_map(const char* key, const char* value);
+
+// you have to prepare a buffer big enough, like 100 bytes
+extern int get_ip(char* addr_out, size_t addrlen);
 
 #ifdef __cplusplus
 }
