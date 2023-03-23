@@ -112,11 +112,11 @@ func TsnetStart(sd C.int) C.int {
 
 //export TsnetUp
 func TsnetUp(sd C.int) C.int {
-	go proxy()
 	s, err := getServer(sd)
 	if err != nil {
 		return s.recErr(err)
 	}
+	go proxy(s.s)
 	_, err = s.s.Up(context.Background()) // cancellation is via TsnetClose
 	return s.recErr(err)
 }
