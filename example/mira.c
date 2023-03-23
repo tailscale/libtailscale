@@ -13,8 +13,17 @@
 int main(void) {
 	mira_start();
 	// here is where you need to customize
-	update_map("openwrt.jit.com.cn", "http://100.122.189.12");
+	update_map("fs.jitlib.3mao.uk", "https://100.64.0.1");
 	// the end
+	
+	sleep (15);
+	char addr_out[100];
+	get_ip(addr_out, sizeof(addr_out));
+
+
+	printf("-----------------------------------------\n");
+	printf("IP addr %s\n", addr_out);
+	printf("-----------------------------------------\n");
         while(1){
 	    sleep(100);
 	}
