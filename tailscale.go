@@ -95,8 +95,6 @@ func TsnetNewServer() C.int {
 	sd := servers.next
 	servers.next++
 	s := &server{s: &tsnet.Server{}}
-	s.s.AuthKey = "tskey-auth-fakekey"
-	s.s.ControlURL = "https://matesec.cn:8888"
 	servers.m[sd] = s
 	return (C.int)(sd)
 }

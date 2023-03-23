@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"unsafe"
 
-	"tailscale.com/client/tailscale"
 	"tailscale.com/tsnet"
 )
 
@@ -69,7 +68,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 //export TsnetIPAddr
-func TsnetIPAddr(addrOut *C.char, addrLen C.size_t) C.int {
+func TsnetIPAddr(sd C.int, addrOut *C.char, addrLen C.size_t) C.int {
 	// Panic here to ensure we always leave the out values NUL-terminated.
 	if addrOut == nil {
 		panic("loopback_api passed nil addr_out")
@@ -80,12 +79,17 @@ func TsnetIPAddr(addrOut *C.char, addrLen C.size_t) C.int {
 	// Start out NUL-termianted to cover error conditions.
 	*addrOut = '\x00'
 
-	status, _ := tailscale.Status(context.Background())
+	s, err := getServer(sd)
+	if err != nil {
+		return s.recErr(err)
+	}
+	lc, _ := s.s.LocalClient()
+	status, _ := lc.Status(context.Background())
 	for _, ip := range status.TailscaleIPs {
 		if ip.Is4() {
 			addr := ip.String()
 			if len(addr)+1 > int(addrLen) {
-				fmt.Printf("libtailscale: loopback addr of %d bytes is too long for addrlen %d", len(addr), addrLen)
+				fmt.Printf("addr of %d bytes is too long for addrlen %d", len(addr), addrLen)
 			}
 			out := unsafe.Slice((*byte)(unsafe.Pointer(addrOut)), addrLen)
 			n := copy(out, addr)
