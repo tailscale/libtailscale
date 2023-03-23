@@ -2,14 +2,17 @@ package main
 
 import (
 	"C"
+	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 )
+import "tailscale.com/tsnet"
 
-func proxy() {
+func proxy(s *tsnet.Server) {
+	tsnetServer = s
 	http.HandleFunc("/", handleRequest)
 	err := http.ListenAndServe("127.0.0.1:9099", nil)
 	if err != nil {
@@ -17,6 +20,7 @@ func proxy() {
 	}
 }
 
+var tsnetServer *tsnet.Server
 var proxyMap = map[string]string{}
 
 //export UpdateProxyMap
@@ -43,7 +47,11 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 
 	proxy := httputil.NewSingleHostReverseProxy(target)
 	proxy.Transport = &http.Transport{
+		DialContext:       tsnetServer.Dial,
 		DisableKeepAlives: true,
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true,
+		},
 	}
 
 	// Update the headers to allow for SSL redirection
