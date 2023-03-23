@@ -25,12 +25,14 @@ macos-x86_64:
 	CGO_ENABLED=1 \
 	GOOS=darwin \
 	GOARCH=amd64 \
+	MACOSX_DEPLOYMENT_TARGET=10.6 \
 	go build -buildmode=c-archive -o $(APPLE_OUT)/macos_x86_64.a .
 
 macos-arm64:
 	CGO_ENABLED=1 \
 	GOOS=darwin \
 	GOARCH=arm64 \
+	MACOSX_DEPLOYMENT_TARGET=12.0 \
 	go build -buildmode=c-archive -o $(APPLE_OUT)/macos_arm64.a .
 
 macos: macos-x86_64 macos-arm64
