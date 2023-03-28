@@ -5,6 +5,8 @@
 // 	cc mira.c /path/to/your.a 
 // On macOS you need to add the following flags to your C compiler:
 // 	-framework CoreFoundation -framework Security
+// On Windows you need to add the following flags to your C compiler:
+// 	 -lcrypt32 -lncrypt
 
 #include <stdio.h>
 #include <unistd.h>
