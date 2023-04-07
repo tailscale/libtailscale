@@ -3,7 +3,7 @@ APPLE_OUT=out/apple
 
 ios-arm64:
 	CGO_ENABLED=1 \
-	GOOS=darwin \
+	GOOS=ios \
 	GOARCH=arm64 \
 	SDK=iphoneos \
 	CC=$(PWD)/clangwrap.sh \
@@ -12,7 +12,7 @@ ios-arm64:
 
 ios-x86_64:
 	CGO_ENABLED=1 \
-	GOOS=darwin \
+	GOOS=ios \
 	GOARCH=amd64 \
 	SDK=iphonesimulator \
 	CC=$(PWD)/clangwrap.sh \
