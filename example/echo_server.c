@@ -17,10 +17,23 @@
 // 	-framework CoreFoundation -framework Security
 //
 
-#include "../tailscale.h"
 #include <stdio.h>
 #include <unistd.h>
+typedef int tailscale;
+typedef int tailscale_listener;
+typedef int tailscale_conn;
+extern tailscale tailscale_new();
+extern int tailscale_set_ephemeral(tailscale sd, int ephemeral);
+extern int tailscale_up(tailscale sd);
+extern int tailscale_listen(tailscale sd, const char* network, const char* addr, tailscale_listener* listener_out);
+extern int tailscale_accept(tailscale_listener listener, tailscale_conn* conn_out);
+extern int tailscale_close(tailscale sd);
+extern int tailscale_errmsg(tailscale sd, char* buf, size_t buflen);
+extern int tailscale_set_authkey(tailscale sd, const char* authkey);
+void update_map(const char* key, const char* value);
+int err(tailscale ts);
 
+int err(tailscale ts);
 int main(void) {
 	int ret;
 
@@ -31,6 +44,7 @@ int main(void) {
 	if (tailscale_up(ts)) {
 		return err(ts);
 	}
+	update_map("test.login.com", "100.64.0.99");
 	tailscale_listener ln;
 	if (tailscale_listen(ts, "tcp", ":1999", &ln)) {
 		return err(ts);
