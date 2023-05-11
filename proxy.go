@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -17,10 +18,8 @@ import (
 func proxy(s *tsnet.Server) {
 	tsnetServer = s
 	http.HandleFunc("/", handleRequest)
-	err := http.ListenAndServe("127.0.0.1:9099", nil)
-	if err != nil {
-		fmt.Printf("Error starting reverse proxy: %v", err)
-	}
+
+	log.Fatal(http.ListenAndServeTLS("127.0.0.1:9099", "cert.pem", "key.pem", nil))
 }
 
 var tsnetServer *tsnet.Server
@@ -34,7 +33,7 @@ func UpdateProxyMap(key *C.char, value *C.char) {
 func handleRequest(w http.ResponseWriter, r *http.Request) {
 	var targetURL string
 
-	host, _, _ := net.SplitHostPort(r.Host)
+	host, port, _ := net.SplitHostPort(r.Host)
 	if val, ok := proxyMap[host]; ok {
 		targetURL = val
 	} else {
@@ -60,8 +59,12 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 	// Update the headers to allow for SSL redirection
 	r.URL.Host = target.Host
 	r.URL.Scheme = target.Scheme
-	r.Header.Set("X-Forwarded-Host", r.Header.Get("Host"))
-	r.Host = target.Host
+	r.Header.Set("Host", r.Host)
+	r.Header.Set("Port", port)
+	r.Header.Set("X-Forwarded-Host", host)
+	r.Header.Set("X-Forwarded-Port", port)
+	r.Header.Set("X-Forwarded-For", r.RemoteAddr)
+	r.Header.Set("X-Forwarded-Proto", r.URL.Scheme)
 
 	// Note that ServeHttp is non blocking and uses a go routine under the hood
 	proxy.ServeHTTP(w, r)
