@@ -1,0 +1,30 @@
+[package]
+name = "tsnet"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+default = ["tokio"]
+tokio = ["dep:tokio"]
+
+[dependencies]
+thiserror = "1"
+
+[dependencies.tokio]
+version = "1"
+optional = true
+features = ["net", "macros", "rt", "io-util"]
+
+[dependencies.tsnet-sys]
+path = "./tsnet-sys"
+features = ["bundled"]
+
+[build-dependencies]
+bindgen = "0.53.1"
+
+[workspace]
+members = [
+  "./tsnet-sys"
+]
