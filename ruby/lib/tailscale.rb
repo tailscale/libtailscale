@@ -5,6 +5,9 @@
 require 'tailscale/version'
 require 'ffi'
 require 'rbconfig'
+require 'base64'
+require 'net/http'
+require 'json'
 
 # Tailscale provides an embedded tailscale network interface for ruby programs.
 class Tailscale 
@@ -36,8 +39,7 @@ class Tailscale
         attach_function :TsnetSetLogFD, [:int, :int], :int
         attach_function :TsnetDial, [:int, :string, :string, :pointer], :int, blocking: true
         attach_function :TsnetListen, [:int, :string, :string, :pointer], :int
-        attach_function :close, [:int], :int
-        attach_function :tailscale_accept, [:int, :pointer], :int, blocking: true
+        attach_function :TsnetAccept, [:int, :pointer], :int, blocking: true
         attach_function :TsnetErrmsg, [:int, :pointer, :size_t], :int
         attach_function :TsnetLoopback, [:int, :pointer, :size_t, :pointer, :pointer], :int
     end
@@ -82,6 +84,7 @@ class Tailscale
         # write.
         def accept
             @ts.assert_open
+            IO.select [IO.for_fd(@listener)]
             conn = FFI::MemoryPointer.new(:int)
             Error.check @ts, Libtailscale::TsnetAccept(@listener, conn)
             IO::new conn.read_int
@@ -90,7 +93,7 @@ class Tailscale
         # Close the listener.
         def close
             @ts.assert_open
-            Error.check @ts, Libtailscale::close(@listener)
+            IO.for_fd(@listener).close
         end
     end
 
@@ -225,9 +228,8 @@ class Tailscale
     end
 
     # Dial a network address. +network+ is one of "tcp" or "udp". +addr+ is the
-    # remote address to connect to, and +local_addr+ is the local address to
-    # bind to. This method blocks until the connection is established.
-    def dial(network, addr, local_addr)
+    # remote address to connect to. This method blocks until the connection is established.
+    def dial(network, addr)
         assert_open
         conn = FFI::MemoryPointer.new(:int)
         Error.check self, Libtailscale::TsnetDial(@t, network, addr, conn)

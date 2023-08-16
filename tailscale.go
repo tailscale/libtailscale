@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"unsafe"
 
+	"golang.org/x/sys/unix"
 	"tailscale.com/hostinfo"
 	"tailscale.com/tsnet"
 	"tailscale.com/types/logger"
@@ -251,6 +252,41 @@ func TsnetListen(sd C.int, network, addr *C.char, listenerOut *C.int) C.int {
 	}()
 
 	*listenerOut = fdC
+	return 0
+}
+
+//export TsnetAccept
+func TsnetAccept(listenerFd C.int, connOut *C.int) C.int {
+	listeners.mu.Lock()
+	ln := listeners.m[listenerFd]
+	listeners.mu.Unlock()
+
+	if ln == nil {
+		return C.EBADF
+	}
+
+	buf := make([]byte, unix.CmsgLen(int(unsafe.Sizeof((C.int)(0)))))
+	_, oobn, _, _, err := syscall.Recvmsg(int(listenerFd), nil, buf, 0)
+	if err != nil {
+		return ln.s.recErr(err)
+	}
+
+	scms, err := syscall.ParseSocketControlMessage(buf[:oobn])
+	if err != nil {
+		return ln.s.recErr(err)
+	}
+	if len(scms) != 1 {
+		return ln.s.recErr(fmt.Errorf("libtailscale: got %d control messages, want 1", len(scms)))
+	}
+	fds, err := syscall.ParseUnixRights(&scms[0])
+	if err != nil {
+		return ln.s.recErr(err)
+	}
+	if len(fds) != 1 {
+		return ln.s.recErr(fmt.Errorf("libtailscale: got %d FDs, want 1", len(fds)))
+	}
+	*connOut = (C.int)(fds[0])
+
 	return 0
 }
 

@@ -22,10 +22,27 @@ class TestTailscale < Minitest::Test
         # TODO: make a more useful test when we can make a server to connect to.
         ts = newts
         ts.start
-        c = ts.dial "udp", "100.100.100.100:53", ""
+        c = ts.dial "udp", "100.100.100.100:53"
         c.close
         ts.close
     end
+
+    # Requires a solution to be logged in:
+    # def test_listen_accept_dial_close
+    #     ts = newts
+    #     ts.up
+    #     hn = ts.local_api.status["Self"]["HostName"]
+    #     s = ts.listen "tcp", ":1999"
+    #     c = ts.dial "tcp", "#{hn}:1999"
+    #     ss = s.accept
+    #     c.write "hello"
+    #     assert_equal "hello", ss.read(5)
+    #     ss.write "world"
+    #     assert_equal "world", c.read(5)
+    #     ss.close
+    #     c.close
+    #     ts.close
+    # end
 
     def newts
         t = Tailscale::new
