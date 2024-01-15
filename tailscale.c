@@ -2,7 +2,15 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tailscale.h"
-#include <sys/socket.h>
+#ifdef __APPLE__  || __linux__
+    #include <sys/socket.h>
+#elif _WIN32
+    #include <winsock2.h>
+	#include <windows.h>
+	#include <ws2tcpip.h>
+#else
+#endif
+
 #include <stdio.h>
 #include <unistd.h>
 
@@ -47,27 +55,46 @@ int tailscale_listen(tailscale sd, const char* network, const char* addr, tailsc
 }
 
 int tailscale_accept(tailscale_listener ld, tailscale_conn* conn_out) {
-	struct msghdr msg = {0};
 
-	char mbuf[256];
-	struct iovec io = { .iov_base = mbuf, .iov_len = sizeof(mbuf) };
-	msg.msg_iov = &io;
-	msg.msg_iovlen = 1;
+	#ifdef __APPLE__  || __linux__
+		struct msghdr msg = {0};
 
-	char cbuf[256];
-	msg.msg_control = cbuf;
-	msg.msg_controllen = sizeof(cbuf);
+		char mbuf[256];
+		struct iovec io = { .iov_base = mbuf, .iov_len = sizeof(mbuf) };
+		msg.msg_iov = &io;
+		msg.msg_iovlen = 1;
 
-	if (recvmsg(ld, &msg, 0) == -1) {
-		return -1;
-	}
+		char cbuf[256];
+		msg.msg_control = cbuf;
+		msg.msg_controllen = sizeof(cbuf);
 
-	struct cmsghdr* cmsg = CMSG_FIRSTHDR(&msg);
-	unsigned char* data = CMSG_DATA(cmsg);
+		if (recvmsg(ld, &msg, 0) == -1) {
+			return -1;
+		}
 
-	int fd = *(int*)data;
-	*conn_out = fd;
-	return 0;
+		struct cmsghdr* cmsg = CMSG_FIRSTHDR(&msg);
+		unsigned char* data = CMSG_DATA(cmsg);
+
+		int fd = *(int*)data;
+		*conn_out = fd;
+		return 0;
+	#elif _WIN32
+		SOCKET ConnectSocket = INVALID_SOCKET;
+		int mbuflen=256;
+		char mbuf[mbuflen];
+		int iResult;
+		do {
+			iResult = recv(ConnectSocket, mbuf, mbuflen, 0);
+			if ( iResult > 0 )
+				printf("Bytes received: %d\n", iResult);
+			else if ( iResult == 0 )
+				printf("Connection closed\n");
+			else
+				printf("recv failed with error: %d\n", WSAGetLastError());
+
+		} while( iResult > 0 );
+
+	#endif
 }
 
 int tailscale_set_dir(tailscale sd, const char* dir) {

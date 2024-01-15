@@ -1,10 +1,9 @@
 package main
 
 import (
+	"github.com/tailscale/libtailscale/tsnetctest"
 	"testing"
 	"time"
-
-	"github.com/tailscale/libtailscale/tsnetctest"
 )
 
 func TestConn(t *testing.T) {

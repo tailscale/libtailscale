@@ -255,6 +255,8 @@ func TsnetListen(sd C.int, network, addr *C.char, listenerOut *C.int) C.int {
 }
 
 func newConn(s *server, netConn net.Conn, connOut *C.int) error {
+
+	// TODO https://github.com/ncm/selectable-socketpair/blob/master/socketpair.c
 	fds, err := syscall.Socketpair(syscall.AF_LOCAL, syscall.SOCK_STREAM, 0)
 	if err != nil {
 		return err
