@@ -50,7 +50,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <string.h>
 
-#ifdef WIN32
+#ifdef _WIN32
 # include <ws2tcpip.h>  /* socklen_t, et al (MSVC20xx) */
 # include <windows.h>
 # include <io.h>
@@ -60,7 +60,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 # include <errno.h>
 #endif
 
-#ifdef WIN32
+#ifdef _WIN32
 
 /* dumb_socketpair:
  *   If make_overlapped is nonzero, both sockets created will be usable for
@@ -70,7 +70,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *   sockets must be closed with closesocket() regardless.
  */
 
-int dumb_socketpair(SOCKET socks[2], int make_overlapped)
+static int dumb_socketpair(SOCKET socks[2], int make_overlapped)
 {
     union {
        struct sockaddr_in inaddr;
@@ -138,7 +138,7 @@ int dumb_socketpair(SOCKET socks[2], int make_overlapped)
     return SOCKET_ERROR;
 }
 #else
-int dumb_socketpair(int socks[2], int dummy)
+static int dumb_socketpair(int socks[2], int dummy)
 {
     if (socks == 0) {
         errno = EINVAL;
