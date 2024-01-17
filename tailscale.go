@@ -5,6 +5,7 @@
 package main
 
 //#include "errno.h"
+//#include "socketpair_handler.h"
 import "C"
 
 import (
@@ -184,7 +185,15 @@ func TsnetListen(sd C.int, network, addr *C.char, listenerOut *C.int) C.int {
 	// feed an fd for the connection through the listener. This lets C use
 	// epoll on the tailscale_listener to know if it should call
 	// tailscale_accept, which avoids a blocking call on the far side.
-	fds, err := syscall.Socketpair(syscall.AF_LOCAL, syscall.SOCK_STREAM, 0)
+	var fds [2]int
+	if os.Getenv("GOOS") == "windows" {
+		fds_pt := C.get_socket_pair()
+		fds_array := (*[1 << 30]int)(unsafe.Pointer(fds_pt))[:2:2]
+		fds[0] = fds_array[0]
+		fds[1] = fds_array[1]
+	} else {
+		fds, err = syscall.Socketpair(syscall.AF_LOCAL, syscall.SOCK_STREAM, 0)
+	}
 	if err != nil {
 		return s.recErr(err)
 	}
@@ -236,8 +245,13 @@ func TsnetListen(sd C.int, network, addr *C.char, listenerOut *C.int) C.int {
 				netConn.Close()
 				continue
 			}
-			rights := syscall.UnixRights(int(connFd))
-			err = syscall.Sendmsg(sp, nil, rights, nil, 0)
+			if os.Getenv("GOOS") == "windows" {
+				_, err = syscall.Write(sp, nil)
+			} else {
+				rights := syscall.UnixRights(int(connFd))
+				err = syscall.Sendmsg(sp, nil, rights, nil, 0)
+			}
+
 			if err != nil {
 				// We handle sp being closed in the read goroutine above.
 				if s.s.Logf != nil {
@@ -257,7 +271,16 @@ func TsnetListen(sd C.int, network, addr *C.char, listenerOut *C.int) C.int {
 func newConn(s *server, netConn net.Conn, connOut *C.int) error {
 
 	// TODO https://github.com/ncm/selectable-socketpair/blob/master/socketpair.c
-	fds, err := syscall.Socketpair(syscall.AF_LOCAL, syscall.SOCK_STREAM, 0)
+	var fds [2]int
+	var err error
+	if os.Getenv("GOOS") == "windows" {
+		fds_pt := C.get_socket_pair()
+		fds_array := (*[1 << 30]int)(unsafe.Pointer(fds_pt))[:2:2]
+		fds[0] = fds_array[0]
+		fds[1] = fds_array[1]
+	} else {
+		fds, err = syscall.Socketpair(syscall.AF_LOCAL, syscall.SOCK_STREAM, 0)
+	}
 	if err != nil {
 		return err
 	}
