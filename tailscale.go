@@ -59,7 +59,7 @@ var listeners struct {
 type listener struct {
 	s  *server
 	ln net.Listener
-	fd int // go side fd of socketpair sent to C
+	fd C.SOCKET // go side fd of socketpair sent to C
 }
 
 // conns tracks all the pipe(2)s allocated via tsnet_dial.
@@ -172,6 +172,7 @@ func TsnetErrmsg(sd C.int, buf *C.char, buflen C.size_t) C.int {
 
 //export TsnetListen
 func TsnetListen(sd C.int, network, addr *C.char, listenerOut *C.int) C.int {
+	fmt.Println("start listening")
 	s, err := getServer(sd)
 	if err != nil {
 		return s.recErr(err)
@@ -187,8 +188,7 @@ func TsnetListen(sd C.int, network, addr *C.char, listenerOut *C.int) C.int {
 	// feed an fd for the connection through the listener. This lets C use
 	// epoll on the tailscale_listener to know if it should call
 	// tailscale_accept, which avoids a blocking call on the far side.
-	var fds [2]int
-	fds, err = platform.GetSocketPair()
+	fds, err := platform.GetSocketPair()
 
 	if err != nil {
 		return s.recErr(err)
@@ -200,9 +200,9 @@ func TsnetListen(sd C.int, network, addr *C.char, listenerOut *C.int) C.int {
 	if listeners.m == nil {
 		listeners.m = map[C.int]*listener{}
 	}
-	listeners.m[fdC] = &listener{s: s, ln: ln, fd: sp}
+	listeners.m[fdC] = &listener{s: s, ln: ln, fd: C.SOCKET(sp)}
 	listeners.mu.Unlock()
-
+	fmt.Println("listener setup")
 	cleanup := func() {
 		// If fdC is closed on the C side, then we end up calling
 		// into cleanup twice. Be careful to avoid syscall.Close
@@ -252,7 +252,7 @@ func TsnetListen(sd C.int, network, addr *C.char, listenerOut *C.int) C.int {
 				netConn.Close()
 				// fallthrough to close connFd, then continue Accept()ing
 			}
-			platform.CloseSocket(int(connFd)) // now owned by recvmsg
+			//platform.CloseSocket(connFd) // now owned by recvmsg
 		}
 	}()
 
@@ -263,9 +263,8 @@ func TsnetListen(sd C.int, network, addr *C.char, listenerOut *C.int) C.int {
 func newConn(s *server, netConn net.Conn, connOut *C.int) error {
 
 	// TODO https://github.com/ncm/selectable-socketpair/blob/master/socketpair.c
-	var fds [2]int
 	var err error
-	fds, err = platform.GetSocketPair()
+	fds, err := platform.GetSocketPair()
 	if err != nil {
 		return err
 	}
@@ -300,7 +299,7 @@ func newConn(s *server, netConn net.Conn, connOut *C.int) error {
 		defer connCleanup()
 		var b [1 << 16]byte
 		io.CopyBuffer(r, netConn, b[:])
-		platform.Shutdown(int(r.Fd()), syscall.SHUT_WR)
+		platform.Shutdown(syscall.Handle(r.Fd()), syscall.SHUT_WR)
 		if cr, ok := netConn.(interface{ CloseRead() error }); ok {
 			cr.CloseRead()
 		}
@@ -309,7 +308,7 @@ func newConn(s *server, netConn net.Conn, connOut *C.int) error {
 		defer connCleanup()
 		var b [1 << 16]byte
 		io.CopyBuffer(netConn, r, b[:])
-		platform.Shutdown(int(r.Fd()), syscall.SHUT_RD)
+		platform.Shutdown(syscall.Handle(r.Fd()), syscall.SHUT_RD)
 		if cw, ok := netConn.(interface{ CloseWrite() error }); ok {
 			cw.CloseWrite()
 		}
