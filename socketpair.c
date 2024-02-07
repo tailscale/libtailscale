@@ -82,9 +82,11 @@ static int dumb_socketpair(SOCKET socks[2], int make_overlapped)
     iResult = WSAStartup(MAKEWORD(2,2), &wsaData);
     if (iResult != 0) {
         printf("failed WSA startup");
-        return;
+        return SOCKET_ERROR;
     }
     SOCKET listener;
+    u_long mode = 1;  // 1 to enable non-blocking socket
+    ioctlsocket(listener, FIONBIO, &mode);
     int e;
     socklen_t addrlen = sizeof(a.inaddr);
     DWORD flags = (make_overlapped ? WSA_FLAG_OVERLAPPED : 0);
@@ -95,15 +97,12 @@ static int dumb_socketpair(SOCKET socks[2], int make_overlapped)
       return SOCKET_ERROR;
     }
     socks[0] = socks[1] = -1;
-    printf("something");
     listener = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (listener == -1) {
-        printf("something2");
         printf("%d", WSAGetLastError());
         return SOCKET_ERROR;
     }
     memset(&a, 0, sizeof(a));
-    printf("something");
     a.inaddr.sin_family = AF_INET;
     a.inaddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     a.inaddr.sin_port = 0;

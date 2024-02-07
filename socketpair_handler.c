@@ -18,9 +18,11 @@ SOCKET *get_socket_pair() {
 
 			spair[0] = 0;
 			spair[1] = 0;
-			if(dumb_socketpair(spair, 1) == SOCKET_ERROR)
+			if(dumb_socketpair(spair, 1) == SOCKET_ERROR) {
 				fprintf(stderr, "Init failed, creating socketpair: %s\n", strerror(errno));
 				free(spair);
+				return NULL;
+			}
 			return spair;
 		#else
 			return NULL;

@@ -2,17 +2,18 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tailscale.h"
-#ifdef __APPLE__ || __linux__
+#if defined(__APPLE__) || defined(__linux__)
 #include <sys/socket.h>
 #elif _WIN32
 #include <winsock2.h>
 #include <windows.h>
 #include <ws2tcpip.h>
 #else
+#include <unistd.h>
 #endif
 
 #include <stdio.h>
-#include <unistd.h>
+
 
 // Functions exported by Go.
 extern int TsnetNewServer();
@@ -63,7 +64,7 @@ int tailscale_listen(tailscale sd, const char *network, const char *addr, tailsc
 int tailscale_accept(tailscale_listener ld, tailscale_conn *conn_out)
 {
 
-#ifdef __APPLE__ || __linux__
+#if defined(__APPLE__) || defined(__linux__)
 	struct msghdr msg = {0};
 
 	char mbuf[256];
@@ -87,30 +88,101 @@ int tailscale_accept(tailscale_listener ld, tailscale_conn *conn_out)
 	*conn_out = fd;
 	return 0;
 #elif _WIN32
-	char mbuf[256];
-	WSABUF wsaBuf;
-	DWORD bytesReceived;
-	DWORD flags = 0;
-	SOCKET fd;
 
-	wsaBuf.buf = mbuf;
-	wsaBuf.len = sizeof(mbuf);
+	// SOCKET ListenSocket = ld;
+	// fd_set readfds;
+	// struct timeval tv;
+	// int result;
 
-	if (WSARecv(ld, &wsaBuf, 1, &bytesReceived, &flags, NULL, NULL) == SOCKET_ERROR)
-	{
-		// Handle error, e.g., print error message or return appropriate error code.
-		return -1;
-	}
+	// // Initialize the set
+	// FD_ZERO(&readfds);
+	// FD_SET(ListenSocket, &readfds);
 
-	// Extract the socket descriptor from the received control information
-	if (WSAGetOverlappedResult(ld, NULL, &bytesReceived, FALSE, &flags) == SOCKET_ERROR)
-	{
-		// Handle error, e.g., print error message or return appropriate error code.
-		return -1;
-	}
+	// // Set timeout to zero, for non-blocking operation
+	// tv.tv_sec = 1;
+	// tv.tv_usec = 0;
 
-	fd = *(SOCKET *)mbuf;
-	*conn_out = fd;
+	// result = select(ListenSocket + 1, &readfds, NULL, NULL, &tv);
+
+	// if (result == -1) {
+	// 	printf("select failed with error: %u\n", WSAGetLastError());
+	// } else if (result == 0) {
+	// 	printf("No incoming connections\n");
+	// } else {
+	// 	printf("Socket is ready to accept a connection\n");
+	// }
+	// char mbuf[256];
+	// WSABUF wsaBuf;
+	// DWORD bytesReceived;
+	// DWORD flags = 0;
+	// SOCKET fd;
+
+	// wsaBuf.buf = mbuf;
+	// wsaBuf.len = sizeof(mbuf);
+
+	// if (WSARecv(ld, &wsaBuf, 1, &bytesReceived, &flags, NULL, NULL) == SOCKET_ERROR)
+	// {
+	// 	// Print the error code
+	// 	int error = WSAGetLastError();
+	// 	fprintf(stderr, "WSARecv failed with error: %d\n", error);
+	// 	return -1;
+	// }
+
+	// // Extract the socket descriptor from the received control information
+	// if (WSAGetOverlappedResult(ld, NULL, &bytesReceived, FALSE, &flags) == SOCKET_ERROR)
+	// {
+	// 	int error = WSAGetLastError();
+	// 	fprintf(stderr, "WSAGetOverlappedResult failed with error: %d\n", error);
+	// 	return -1;
+	// }
+	// second attemp
+	// WSADATA wsaData;
+	// int error = WSAStartup(MAKEWORD(2,2), &wsaData);
+    // if (error) {
+    //     printf("WSAStartup() failed with error: %d\n", error);
+    //     return 1;
+    // }
+	// fd =  WSAAccept(ListenSocket + 1, NULL, NULL, NULL, 0);
+	// if (fd == INVALID_SOCKET) 
+	// {	
+	// 	int error = WSAGetLastError();
+	// 	fprintf(stderr, "WSAAccept failed with error: %d\n", error);
+	// 	//return -1;
+	// } 
+	
+	// *conn_out = fd;
+	// return 0;
+	// third attempt
+	// char mbuf[256];
+	// WSABUF wsaBuf;
+	// DWORD bytesReceived;
+	// DWORD flags = 0;
+
+	// wsaBuf.buf = mbuf;
+	// wsaBuf.len = sizeof(mbuf);
+
+	// if (WSARecv(ld, &wsaBuf, 1, &bytesReceived, &flags, NULL, NULL) == SOCKET_ERROR)
+	// {
+	// 	// Print the error code
+	// 	int error = WSAGetLastError();
+	// 	fprintf(stderr, "WSARecv failed with error: %d\n", error);
+	// 	return -1;
+	// }
+
+	// // If WSARecv succeeded, return the socket
+	// *conn_out = ld;
+	// return 0;
+	struct sockaddr clientAddr;
+    int clientAddrSize = sizeof(clientAddr);
+
+    // Accept incoming connection
+    *conn_out = accept(ld, &clientAddr, &clientAddrSize);
+    if (*conn_out == INVALID_SOCKET) {
+        printf("Accept failed with error code: %d\n", WSAGetLastError());
+        return -1;
+    }
+
+    return 0;
 
 #endif
 }

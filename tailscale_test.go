@@ -1,9 +1,10 @@
 package main
 
 import (
-	"github.com/tailscale/libtailscale/tsnetctest"
 	"testing"
 	"time"
+
+	"github.com/tailscale/libtailscale/tsnetctest"
 )
 
 func TestConn(t *testing.T) {
@@ -25,6 +26,7 @@ func TestConn(t *testing.T) {
 	for i := 0; i < 50; i++ {
 		conns.mu.Lock()
 		remConns = len(conns.m)
+		//fmt.Printf("New connection established: RemoteAddr=%s, LocalAddr=%s\n", newConn.RemoteAddr(), netConn.LocalAddr())
 		conns.mu.Unlock()
 
 		listeners.mu.Lock()
