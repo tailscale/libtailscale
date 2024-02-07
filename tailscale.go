@@ -5,6 +5,8 @@
 package main
 
 //#include "errno.h"
+//#include "socketpair_handler.h"
+//#include "tailscale.h"
 import "C"
 
 import (
@@ -16,6 +18,8 @@ import (
 	"sync"
 	"syscall"
 	"unsafe"
+
+	"github.com/tailscale/libtailscale/platform"
 
 	"tailscale.com/hostinfo"
 	"tailscale.com/tsnet"
@@ -56,7 +60,7 @@ var listeners struct {
 type listener struct {
 	s  *server
 	ln net.Listener
-	fd int // go side fd of socketpair sent to C
+	fd C.SOCKET // go side fd of socketpair sent to C
 }
 
 // conns tracks all the pipe(2)s allocated via tsnet_dial.
@@ -78,6 +82,11 @@ func (s *server) recErr(err error) C.int {
 	}
 	s.lastErr = err.Error()
 	return -1
+}
+
+//export TsnetAccept
+func TsnetAccept(sd C.int, connOut *C.int) C.int {
+	return C.tailscale_accept(sd, connOut)
 }
 
 //export TsnetNewServer
@@ -120,6 +129,7 @@ func TsnetUp(sd C.int) C.int {
 
 //export TsnetClose
 func TsnetClose(sd C.int) C.int {
+	fmt.Println("CLOSING TSNET")
 	servers.mu.Lock()
 	s := servers.m[sd]
 	if s != nil {
@@ -169,25 +179,30 @@ func TsnetErrmsg(sd C.int, buf *C.char, buflen C.size_t) C.int {
 
 //export TsnetListen
 func TsnetListen(sd C.int, network, addr *C.char, listenerOut *C.int) C.int {
+	fmt.Println("start listening, ", network, addr)
 	s, err := getServer(sd)
 	if err != nil {
+		fmt.Println("error No server")
 		return s.recErr(err)
 	}
 
 	ln, err := s.s.Listen(C.GoString(network), C.GoString(addr))
 	if err != nil {
+		fmt.Println("error somewhere in the listening - ", err)
 		return s.recErr(err)
 	}
-
 	// The tailscale_listener we return to C is one side of a socketpair(2).
 	// We do this so we can proactively call ln.Accept in a goroutine and
 	// feed an fd for the connection through the listener. This lets C use
 	// epoll on the tailscale_listener to know if it should call
 	// tailscale_accept, which avoids a blocking call on the far side.
-	fds, err := syscall.Socketpair(syscall.AF_LOCAL, syscall.SOCK_STREAM, 0)
+	fds, fdPt, err := platform.GetSocketPair()
+
 	if err != nil {
+		fmt.Println("error in getting socketpair")
 		return s.recErr(err)
 	}
+
 	sp := fds[1]
 	fdC := C.int(fds[0])
 
@@ -195,9 +210,10 @@ func TsnetListen(sd C.int, network, addr *C.char, listenerOut *C.int) C.int {
 	if listeners.m == nil {
 		listeners.m = map[C.int]*listener{}
 	}
-	listeners.m[fdC] = &listener{s: s, ln: ln, fd: sp}
+	listeners.m[fdC] = &listener{s: s, ln: ln, fd: C.SOCKET(sp)}
 	listeners.mu.Unlock()
 
+	fmt.Println("listener setup")
 	cleanup := func() {
 		// If fdC is closed on the C side, then we end up calling
 		// into cleanup twice. Be careful to avoid syscall.Close
@@ -205,11 +221,15 @@ func TsnetListen(sd C.int, network, addr *C.char, listenerOut *C.int) C.int {
 		listeners.mu.Lock()
 		if tsLn, ok := listeners.m[fdC]; ok && tsLn.ln == ln {
 			delete(listeners.m, fdC)
-			syscall.Close(sp)
+			platform.CloseSocket(sp)
 		}
 		listeners.mu.Unlock()
+		C.free(unsafe.Pointer(fdPt))
 
+		fmt.Println("ln closing...")
 		ln.Close()
+		fmt.Println("ln closed")
+
 	}
 	go func() {
 		// fdC is never written to, so trying to read from sp blocks
@@ -218,14 +238,19 @@ func TsnetListen(sd C.int, network, addr *C.char, listenerOut *C.int) C.int {
 		//
 		// TODO: would using os.NewFile avoid a locked up thread?
 		var buf [256]byte
-		syscall.Read(sp, buf[:])
-		cleanup()
+		platform.ReadSocket(sp, &buf)
+		//cleanup()
 	}()
 	go func() {
 		defer cleanup()
 		for {
+			fmt.Println("cleanup starting")
+			fmt.Println("listener: ", ln)
 			netConn, err := ln.Accept()
+			fmt.Println("accept", netConn, err)
 			if err != nil {
+				fmt.Println("error in accept")
+				s.s.Logf("libtailscale.accept: newConn: %v", err)
 				return
 			}
 			var connFd C.int
@@ -233,32 +258,41 @@ func TsnetListen(sd C.int, network, addr *C.char, listenerOut *C.int) C.int {
 				if s.s.Logf != nil {
 					s.s.Logf("libtailscale.accept: newConn: %v", err)
 				}
+				fmt.Println(("net closed 1"))
 				netConn.Close()
 				continue
 			}
-			rights := syscall.UnixRights(int(connFd))
-			err = syscall.Sendmsg(sp, nil, rights, nil, 0)
+			fmt.Println("send message")
+			err = platform.SendMessage(sp, []byte("hello"), int(connFd), nil, 0)
+
 			if err != nil {
 				// We handle sp being closed in the read goroutine above.
 				if s.s.Logf != nil {
 					s.s.Logf("libtailscale.accept: sendmsg failed: %v", err)
 				}
+				fmt.Println("net closed 12", err)
 				netConn.Close()
 				// fallthrough to close connFd, then continue Accept()ing
 			}
-			syscall.Close(int(connFd)) // now owned by recvmsg
+			platform.CloseSocket(sp) // now owned by recvmsg
+			netConn.Close()
+			fmt.Println(("net closed 3"))
 		}
 	}()
 
 	*listenerOut = fdC
+	fmt.Println("returning 0 ")
 	return 0
 }
 
 func newConn(s *server, netConn net.Conn, connOut *C.int) error {
-	fds, err := syscall.Socketpair(syscall.AF_LOCAL, syscall.SOCK_STREAM, 0)
+	fmt.Println("newconn starting")
+	fds, fdPt, err := platform.GetSocketPair()
 	if err != nil {
+		fmt.Println("Error getting new socketpair ")
 		return err
 	}
+
 	r := os.NewFile(uintptr(fds[1]), "socketpair-r")
 	c := &conn{s: s.s, c: netConn, r: r}
 	fdC := C.int(fds[0])
@@ -271,26 +305,33 @@ func newConn(s *server, netConn net.Conn, connOut *C.int) error {
 	conns.mu.Unlock()
 
 	connCleanup := func() {
+		fmt.Println("Connection cleanup")
 		var inCleanup bool
 		conns.mu.Lock()
+		fmt.Println("Locked")
 		if tsConn, ok := conns.m[fdC]; ok && tsConn.c == netConn {
+			fmt.Println("Connection is alive")
 			delete(conns.m, fdC)
 			inCleanup = true
 		}
 		conns.mu.Unlock()
-
+		fmt.Println("Unlocked + cleanup: ", inCleanup, conns)
 		if !inCleanup {
 			return
 		}
 
+		C.free(unsafe.Pointer(fdPt))
 		r.Close()
+		fmt.Println("netconn closing ", conns)
+		fmt.Println("servers: ", servers)
+		fmt.Println("listeners: ", listeners)
 		netConn.Close()
 	}
 	go func() {
 		defer connCleanup()
 		var b [1 << 16]byte
 		io.CopyBuffer(r, netConn, b[:])
-		syscall.Shutdown(int(r.Fd()), syscall.SHUT_WR)
+		platform.Shutdown(syscall.Handle(r.Fd()), syscall.SHUT_RD)
 		if cr, ok := netConn.(interface{ CloseRead() error }); ok {
 			cr.CloseRead()
 		}
@@ -299,12 +340,11 @@ func newConn(s *server, netConn net.Conn, connOut *C.int) error {
 		defer connCleanup()
 		var b [1 << 16]byte
 		io.CopyBuffer(netConn, r, b[:])
-		syscall.Shutdown(int(r.Fd()), syscall.SHUT_RD)
+		platform.Shutdown(syscall.Handle(r.Fd()), syscall.SHUT_WR)
 		if cw, ok := netConn.(interface{ CloseWrite() error }); ok {
 			cw.CloseWrite()
 		}
 	}()
-
 	*connOut = fdC
 	return nil
 }
