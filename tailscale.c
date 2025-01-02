@@ -19,6 +19,8 @@ extern int TsnetSetAuthKey(int sd, char* str);
 extern int TsnetSetControlURL(int sd, char* str);
 extern int TsnetSetEphemeral(int sd, int ephemeral);
 extern int TsnetSetLogFD(int sd, int fd);
+extern int TsnetGetIps(int sd, char *buf, size_t buflen);
+extern int TsnetGetRemoteAddr(int listener, int conn, char *buf, size_t buflen);
 extern int TsnetListen(int sd, char* net, char* addr, int* listenerOut);
 extern int TsnetLoopback(int sd, char* addrOut, size_t addrLen, char* proxyOut, char* localOut);
 
@@ -68,6 +70,14 @@ int tailscale_accept(tailscale_listener ld, tailscale_conn* conn_out) {
 	int fd = *(int*)data;
 	*conn_out = fd;
 	return 0;
+}
+
+int tailscale_getremoteaddr(tailscale_listener l, tailscale_conn conn, char* buf, size_t buflen) {
+	return TsnetGetRemoteAddr(l, conn, buf, buflen);
+}
+
+int tailscale_getips(tailscale sd, char* buf, size_t buflen) {
+	return TsnetGetIps(sd, buf, buflen);
 }
 
 int tailscale_set_dir(tailscale sd, const char* dir) {

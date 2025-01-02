@@ -1,8 +1,26 @@
 // Copyright (c) Tailscale Inc & AUTHORS
 // SPDX-License-Identifier: BSD-3-Clause
 
-//
-// Tailscale C library.
+#import <Foundation/Foundation.h>
+
+//! Project version number for Tailscale.
+FOUNDATION_EXPORT double TailscaleKitVersionNumber;
+
+//! Project version string for Tailscale.
+FOUNDATION_EXPORT const unsigned char TailscaleKitVersionString[];
+
+
+// TODO: Is there away to avoid the header duplication here?
+// WARNING: Adding/changing the libtailscale functions must be replicated here
+#include <stddef.h>
+
+#ifndef TAILSCALEKIT_H
+#define TAILSCALEKIT_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 //
 // Use this library to compile Tailscale into your program and get
 // an entirely userspace IP address on a tailnet.
@@ -10,17 +28,6 @@
 // From here you can listen for other programs on your tailnet dialing
 // you, or connect directly to other services.
 //
-
-
-#include <stddef.h>
-
-#ifndef TAILSCALE_H
-#define TAILSCALE_H
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 
 // tailscale is a handle onto a Tailscale server.
 typedef int tailscale;
@@ -50,9 +57,9 @@ extern int tailscale_up(tailscale sd);
 // tailscale_close shuts down the server.
 //
 // Returns:
-// 	0     - success
-// 	EBADF - sd is not a valid tailscale
-// 	-1    - other error, details printed to the tsnet logger
+//     0     - success
+//     EBADF - sd is not a valid tailscale
+//     -1    - other error, details printed to the tsnet logger
 extern int tailscale_close(tailscale sd);
 
 // The following set tailscale configuration options.
@@ -90,9 +97,9 @@ typedef int tailscale_conn;
 // the output.  You may assume the output is a list of well-formed IPs.
 //
 // Returns:
-//  0      - Success
-// 	EBADF  - sd is not a valid tailscale, or l or conn are not valid listeneras or connections
-// 	ERANGE - insufficient storage for buf
+//     0    - Success
+//     EBADF  - sd is not a valid tailscale, or l or conn are not valid listeneras or connections
+//     ERANGE - insufficient storage for buf
 extern int tailscale_getips(tailscale sd, char* buf, size_t buflen);
 
 // tailscale_dial connects to the address on the tailnet.
@@ -135,8 +142,8 @@ extern int tailscale_listen(tailscale sd, const char* network, const char* addr,
 // will ge written to buf on on success.
 // Returns:
 //   0    - Success
-// 	EBADF  - sd is not a valid tailscale, or l or conn are not valid listeneras or connections
-// 	ERANGE - insufficient storage for buf
+//     EBADF  - sd is not a valid tailscale, or l or conn are not valid listeneras or connections
+//     ERANGE - insufficient storage for buf
 extern int tailscale_getremoteaddr(tailscale_listener l, tailscale_conn conn, char* buf, size_t buflen);
 
 
@@ -147,9 +154,9 @@ extern int tailscale_getremoteaddr(tailscale_listener l, tailscale_conn conn, ch
 // The newly allocated connection is written to conn_out.
 //
 // Returns:
-// 	0     - success
-// 	EBADF - listener is not a valid tailscale
-// 	-1    - call tailscale_errmsg for details
+//     0     - success
+//     EBADF - listener is not a valid tailscale
+//     -1    - call tailscale_errmsg for details
 extern int tailscale_accept(tailscale_listener listener, tailscale_conn* conn_out);
 
 // tailscale_loopback starts a loopback address server.
@@ -176,14 +183,15 @@ extern int tailscale_accept(tailscale_listener listener, tailscale_conn* conn_ou
 extern int tailscale_loopback(tailscale sd, char* addr_out, size_t addrlen, char* proxy_cred_out, char* local_api_cred_out);
 
 // tailscale_errmsg writes the details of the last error to buf.
-// 
+//
 // After returning, buf is always NUL-terminated.
 //
 // Returns:
-// 	0      - success
-// 	EBADF  - sd is not a valid tailscale
-// 	ERANGE - insufficient storage for buf
+//     0      - success
+//     EBADF  - sd is not a valid tailscale
+//     ERANGE - insufficient storage for buf
 extern int tailscale_errmsg(tailscale sd, char* buf, size_t buflen);
+
 
 
 #ifdef __cplusplus

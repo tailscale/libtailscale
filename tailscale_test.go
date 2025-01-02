@@ -58,3 +58,22 @@ func TestConn(t *testing.T) {
 		t.Errorf("want no remaining tsnet_listener objects, got %d", remLns)
 	}
 }
+
+func TestExtractIP(t *testing.T) {
+	ipv4 := "1.23.33.4:12343"
+	ipv6 := "[1::2234::34fc::44]:56576"
+
+	got4 := extractIP(ipv4)
+	got6 := extractIP(ipv6)
+
+	want4 := "1.23.33.4"
+	want6 := "[1::2234::34fc::44]"
+
+	if got4 != want4 {
+		t.Errorf("ipv4 port stripping failed")
+	}
+
+	if got6 != want6 {
+		t.Errorf("ipv6 port stripping failed %s != %s", got6, want6)
+	}
+}

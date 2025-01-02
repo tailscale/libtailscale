@@ -13,6 +13,8 @@ import (
 	"io"
 	"net"
 	"os"
+	"regexp"
+	"strings"
 	"sync"
 	"syscall"
 	"unsafe"
@@ -57,6 +59,8 @@ type listener struct {
 	s  *server
 	ln net.Listener
 	fd int // go side fd of socketpair sent to C
+	mu sync.Mutex
+	m  map[C.int]net.Addr //maps fds to remote addresses for lookup
 }
 
 // conns tracks all the pipe(2)s allocated via tsnet_dial.
@@ -141,6 +145,36 @@ func TsnetClose(sd C.int) C.int {
 	return 0
 }
 
+//export TsnetGetIps
+func TsnetGetIps(sd C.int, buf *C.char, buflen C.size_t) C.int {
+	if buf == nil {
+		panic("errmsg passed nil buf")
+	} else if buflen == 0 {
+		panic("errmsg passed buflen of 0")
+	}
+
+	servers.mu.Lock()
+	s := servers.m[sd]
+	servers.mu.Unlock()
+
+	out := unsafe.Slice((*byte)(unsafe.Pointer(buf)), buflen)
+
+	if s == nil {
+		out[0] = '\x00'
+		return C.EBADF
+	}
+
+	ip4, ip6 := s.s.TailscaleIPs()
+	joined := strings.Join([]string{ip4.String(), ip6.String()}, ",")
+	n := copy(out, joined)
+	if len(out) < len(joined)-1 {
+		out[len(out)-1] = '\x00' // always NUL-terminate
+		return C.ERANGE
+	}
+	out[n] = '\x00'
+	return 0
+}
+
 //export TsnetErrmsg
 func TsnetErrmsg(sd C.int, buf *C.char, buflen C.size_t) C.int {
 	if buf == nil {
@@ -195,7 +229,8 @@ func TsnetListen(sd C.int, network, addr *C.char, listenerOut *C.int) C.int {
 	if listeners.m == nil {
 		listeners.m = map[C.int]*listener{}
 	}
-	listeners.m[fdC] = &listener{s: s, ln: ln, fd: sp}
+	listener := &listener{s: s, ln: ln, fd: sp, m: map[C.int]net.Addr{}}
+	listeners.m[fdC] = listener
 	listeners.mu.Unlock()
 
 	cleanup := func() {
@@ -246,6 +281,12 @@ func TsnetListen(sd C.int, network, addr *C.char, listenerOut *C.int) C.int {
 				netConn.Close()
 				// fallthrough to close connFd, then continue Accept()ing
 			}
+
+			// map the connection to the remote address
+			listener.mu.Lock()
+			listener.m[connFd] = netConn.RemoteAddr()
+			listener.mu.Unlock()
+
 			syscall.Close(int(connFd)) // now owned by recvmsg
 		}
 	}()
@@ -307,6 +348,49 @@ func newConn(s *server, netConn net.Conn, connOut *C.int) error {
 
 	*connOut = fdC
 	return nil
+}
+
+//export TsnetGetRemoteAddr
+func TsnetGetRemoteAddr(listener C.int, conn C.int, buf *C.char, buflen C.size_t) C.int {
+	if buf == nil {
+		panic("errmsg passed nil buf")
+	} else if buflen == 0 {
+		panic("errmsg passed buflen of 0")
+	}
+	out := unsafe.Slice((*byte)(unsafe.Pointer(buf)), buflen)
+
+	listeners.mu.Lock()
+	defer listeners.mu.Unlock()
+	l := listeners.m[listener]
+	if l == nil {
+		out[0] = '\x00'
+		return C.EBADF
+	}
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	addr, ok := l.m[conn]
+	if !ok {
+		out[0] = '\x00'
+		return C.EBADF
+	}
+
+	ip := extractIP(addr.String())
+
+	n := copy(out, ip)
+	if len(out) < len(ip)-1 {
+		out[len(out)-1] = '\x00' // always NUL-terminate
+		return C.ERANGE
+	}
+	out[n] = '\x00'
+	return 0
+}
+
+// Strips the port from connection IPs
+func extractIP(ipWithPort string) string {
+	re := regexp.MustCompile(`(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})|\[([0-9a-fA-F:]+)\]`)
+	match := re.FindString(ipWithPort)
+	return match
 }
 
 //export TsnetDial
@@ -392,6 +476,7 @@ func TsnetSetLogFD(sd, fd C.int) C.int {
 	f := os.NewFile(uintptr(fd), "logfd")
 	s.s.Logf = func(format string, args ...any) {
 		fmt.Fprintf(f, format, args...)
+		fmt.Fprintf(f, "\n")
 	}
 	return 0
 }
