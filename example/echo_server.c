@@ -14,7 +14,7 @@
 //
 // On macOS you may need to add the following flags to your C compiler:
 //
-// 	-framework CoreFoundation -framework Security
+// 	-framework CoreFoundation -framework Security -framework IOKit
 //
 
 #include "../tailscale.h"
