@@ -1,4 +1,6 @@
+libtailscale
 libtailscale.so
+libtailscale.dylib
 libtailscale.a
 libtailscale.h
 libtailscale.tar*

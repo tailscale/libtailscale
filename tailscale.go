@@ -295,6 +295,99 @@ func TsnetListen(sd C.int, network, addr *C.char, listenerOut *C.int) C.int {
 	return 0
 }
 
+//export TsnetListenFunnel
+func TsnetListenFunnel(sd C.int, network, addr *C.char, funnelOnly C.int, listenerOut *C.int) C.int {
+	s, err := getServer(sd)
+	if err != nil {
+		return s.recErr(err)
+	}
+
+	var ln net.Listener
+	if funnelOnly != 0 {
+		ln, err = s.s.ListenFunnel(C.GoString(network), C.GoString(addr), tsnet.FunnelOnly())
+	} else {
+		ln, err = s.s.ListenFunnel(C.GoString(network), C.GoString(addr))
+	}
+
+	if err != nil {
+		return s.recErr(err)
+	}
+
+	// The tailscale_listener we return to C is one side of a socketpair(2).
+	// We do this so we can proactively call ln.Accept in a goroutine and
+	// feed an fd for the connection through the listener. This lets C use
+	// epoll on the tailscale_listener to know if it should call
+	// tailscale_accept, which avoids a blocking call on the far side.
+	fds, err := syscall.Socketpair(syscall.AF_LOCAL, syscall.SOCK_STREAM, 0)
+	if err != nil {
+		return s.recErr(err)
+	}
+	sp := fds[1]
+	fdC := C.int(fds[0])
+
+	listeners.mu.Lock()
+	if listeners.m == nil {
+		listeners.m = map[C.int]*listener{}
+	}
+	listeners.m[fdC] = &listener{s: s, ln: ln, fd: sp}
+	listeners.mu.Unlock()
+
+	cleanup := func() {
+		// If fdC is closed on the C side, then we end up calling
+		// into cleanup twice. Be careful to avoid syscall.Close
+		// twice as the FD may have been reallocated.
+		listeners.mu.Lock()
+		if tsLn, ok := listeners.m[fdC]; ok && tsLn.ln == ln {
+			delete(listeners.m, fdC)
+			syscall.Close(sp)
+		}
+		listeners.mu.Unlock()
+
+		ln.Close()
+	}
+	go func() {
+		// fdC is never written to, so trying to read from sp blocks
+		// until fdC is closed. We use this as a signal that C is
+		// done with the listener, and we can tear it down.
+		//
+		// TODO: would using os.NewFile avoid a locked up thread?
+		var buf [256]byte
+		syscall.Read(sp, buf[:])
+		cleanup()
+	}()
+	go func() {
+		defer cleanup()
+		for {
+			netConn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			var connFd C.int
+			if err := newConn(s, netConn, &connFd); err != nil {
+				if s.s.Logf != nil {
+					s.s.Logf("libtailscale.accept: newConn: %v", err)
+				}
+				netConn.Close()
+				continue
+			}
+			rights := syscall.UnixRights(int(connFd))
+			err = syscall.Sendmsg(sp, nil, rights, nil, 0)
+			if err != nil {
+				// We handle sp being closed in the read goroutine above.
+				if s.s.Logf != nil {
+					s.s.Logf("libtailscale.accept: sendmsg failed: %v", err)
+				}
+				netConn.Close()
+				// fallthrough to close connFd, then continue Accept()ing
+			}
+			syscall.Close(int(connFd)) // now owned by recvmsg
+		}
+	}()
+
+	*listenerOut = fdC
+	return 0
+}
+
 func newConn(s *server, netConn net.Conn, connOut *C.int) error {
 	fds, err := syscall.Socketpair(syscall.AF_LOCAL, syscall.SOCK_STREAM, 0)
 	if err != nil {
@@ -529,5 +622,32 @@ func TsnetLoopback(sd C.int, addrOut *C.char, addrLen C.size_t, proxyOut *C.char
 	copy(out, localAPICred)
 	out[32] = '\x00'
 
+	return 0
+}
+
+//export TsnetGetCertDomains
+func TsnetGetCertDomains(sd C.int, buf *C.char, buflen C.size_t) C.int {
+	if buf == nil {
+		panic("TsnetGetCertDomains passed nil buf")
+	} else if buflen == 0 {
+		panic("TsnetGetCertDomains passed buflen of 0")
+	}
+
+	s, err := getServer(sd)
+	if err != nil {
+		return s.recErr(err)
+	}
+
+	domains := s.s.CertDomains()
+	if len(domains) == 0 {
+		return s.recErr(fmt.Errorf("no domains available"))
+	}
+	firstDomain := domains[0]
+	if C.size_t(len(firstDomain)+1) > buflen {
+		return C.ERANGE // buffer too small
+	}
+	output := unsafe.Slice((*byte)(unsafe.Pointer(buf)), buflen)
+	copy(output, firstDomain)
+	output[len(firstDomain)] = 0 // null-terminate
 	return 0
 }
