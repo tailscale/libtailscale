@@ -70,7 +70,7 @@ extern int tailscale_set_ephemeral(tailscale sd, int ephemeral);
 
 // tailscale_set_logfd instructs the tailscale instance to write logs to fd.
 //
-// An fd value of -1 means discard all logging.
+// A fd value of -1 means discard all logging.
 //
 // Returns zero on success or -1 on error, call tailscale_errmsg for details.
 extern int tailscale_set_logfd(tailscale sd, int fd);
@@ -81,17 +81,16 @@ extern int tailscale_set_logfd(tailscale sd, int fd);
 // For extra control over the connection, see the tailscale_conn_* functions.
 typedef int tailscale_conn;
 
-// Returns the IP addresses of the the Tailscale server as
-// a comma separated list.
+// Returns the IP addresses of the Tailscale server as a comma separated list.
 //
 // The provided buffer must be of sufficient size to hold the concatenated
-// IPs as strings.  This is typically <ipv4>,<ipv6> but maybe empty, or
-// contain any number of ips.   The caller is responsible for parsing
+// IPs as strings.  This is typically `<ipv4>,<ipv6>` but maybe empty, or
+// contain any number of ips. The caller is responsible for parsing
 // the output.  You may assume the output is a list of well-formed IPs.
 //
 // Returns:
-//  0      - Success
-// 	EBADF  - sd is not a valid tailscale, or l or conn are not valid listeneras or connections
+// 	0      - Success
+// 	EBADF  - sd is not a valid tailscale, or l or conn are not valid listeners or connections
 // 	ERANGE - insufficient storage for buf
 extern int tailscale_getips(tailscale sd, char* buf, size_t buflen);
 
@@ -110,7 +109,7 @@ extern int tailscale_dial(tailscale sd, const char* network, const char* addr, t
 // A tailscale_listener is a socket on the tailnet listening for connections.
 //
 // It is much like allocating a system socket(2) and calling listen(2).
-// Accept connections with tailscale_accept and close the listener  with close.
+// Accept connections with tailscale_accept and close the listener with close.
 //
 // Under the hood, a tailscale_listener is one half of a socketpair itself,
 // used to move the connection fd from Go to C. This means you can use epoll
@@ -151,14 +150,13 @@ extern int tailscale_listen(tailscale sd, const char* network, const char* addr,
 // Returns zero on success or -1 on error, call tailscale_errmsg for details.
 extern int tailscale_listen_funnel(tailscale sd, const char *network, const char *addr, int funnelOnly, tailscale_listener *listener_out);
 
-// Returns the remote address for an incoming connection for a particular listener.  The address (eitehr ip4 or ip6)
-// will ge written to buf on on success.
+// Returns the remote address for an incoming connection for a particular listener.
+// The address (either ip4 or ip6) will ge written to buf on success.
 // Returns:
-//   0    - Success
-// 	EBADF  - sd is not a valid tailscale, or l or conn are not valid listeneras or connections
+// 	0      - Success
+// 	EBADF  - sd is not a valid tailscale, or l or conn are not valid listeners or connections
 // 	ERANGE - insufficient storage for buf
-extern int tailscale_getremoteaddr(tailscale_listener l, tailscale_conn conn, char* buf, size_t buflen);
-
+extern int tailscale_getremoteaddr(tailscale_listener l, tailscale_conn conn, char *buf, size_t buflen);
 
 // tailscale_accept accepts a connection on a tailscale_listener.
 //
