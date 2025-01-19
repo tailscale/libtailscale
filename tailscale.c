@@ -5,6 +5,7 @@
 #include <sys/socket.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <errno.h>
 
 // Functions exported by Go.
 extern int TsnetNewServer();
@@ -22,7 +23,9 @@ extern int TsnetSetLogFD(int sd, int fd);
 extern int TsnetGetIps(int sd, char *buf, size_t buflen);
 extern int TsnetGetRemoteAddr(int listener, int conn, char *buf, size_t buflen);
 extern int TsnetListen(int sd, char* net, char* addr, int* listenerOut);
+extern int TsnetListenFunnel(int sd, char *net, char *addr, int funnelOnly, int *listenerOut);
 extern int TsnetLoopback(int sd, char* addrOut, size_t addrLen, char* proxyOut, char* localOut);
+extern int TsnetGetCertDomains(int sd, char* buf, size_t buflen);
 
 tailscale tailscale_new() {
 	return TsnetNewServer();
@@ -48,7 +51,11 @@ int tailscale_listen(tailscale sd, const char* network, const char* addr, tailsc
 	return TsnetListen(sd, (char*)network, (char*)addr, (int*)listener_out);
 }
 
-int tailscale_accept(tailscale_listener ld, tailscale_conn* conn_out) {
+int tailscale_listen_funnel(tailscale sd, const char* network, const char* addr, int funnelOnly, tailscale_listener* listener_out) {
+	return TsnetListenFunnel(sd, (char*) network, (char*) addr, funnelOnly, (int*) listener_out);
+}
+
+int _tailscale_accept(tailscale_listener ld, tailscale_conn* conn_out, int flags) {
 	struct msghdr msg = {0};
 
 	char mbuf[256];
@@ -60,8 +67,17 @@ int tailscale_accept(tailscale_listener ld, tailscale_conn* conn_out) {
 	msg.msg_control = cbuf;
 	msg.msg_controllen = sizeof(cbuf);
 
-	if (recvmsg(ld, &msg, 0) == -1) {
-		return -1;
+	if (recvmsg(ld, &msg, flags) == -1)
+	{
+		switch (errno)
+		{
+		case EAGAIN:
+			return EAGAIN;
+		case ECONNRESET:
+			return ECONNRESET;
+		default:
+			return -1;
+		}
 	}
 
 	struct cmsghdr* cmsg = CMSG_FIRSTHDR(&msg);
@@ -70,6 +86,14 @@ int tailscale_accept(tailscale_listener ld, tailscale_conn* conn_out) {
 	int fd = *(int*)data;
 	*conn_out = fd;
 	return 0;
+}
+
+int tailscale_accept(tailscale_listener ld, tailscale_conn* conn_out) {
+	return _tailscale_accept(ld, conn_out, 0);
+}
+
+int tailscale_accept_nonblocking(tailscale_listener ld, tailscale_conn* conn_out) {
+	return _tailscale_accept(ld, conn_out, MSG_DONTWAIT);
 }
 
 int tailscale_getremoteaddr(tailscale_listener l, tailscale_conn conn, char* buf, size_t buflen) {
@@ -105,4 +129,8 @@ int tailscale_loopback(tailscale sd, char* addr_out, size_t addrlen, char* proxy
 
 int tailscale_errmsg(tailscale sd, char* buf, size_t buflen) {
 	return TsnetErrmsg(sd, buf, buflen);
+}
+
+int tailscale_cert_domains(tailscale sd, char* buf, size_t buflen) {
+	return TsnetGetCertDomains(sd, buf, buflen);
 }
