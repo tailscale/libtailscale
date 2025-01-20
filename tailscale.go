@@ -534,8 +534,8 @@ func TsnetLoopback(sd C.int, addrOut *C.char, addrLen C.size_t, proxyOut *C.char
 	return 0
 }
 
-//export TsnetEnableFunnel
-func TsnetEnableFunnel(sd C.int, srvPort C.int) C.int {
+//export TsnetEnableFunnelToLocalhostPlaintextHttp1
+func TsnetEnableFunnelToLocalhostPlaintextHttp1(sd C.int, srvPort C.int) C.int {
 	s, err := getServer(sd)
 	if err != nil {
 		return s.recErr(err)
