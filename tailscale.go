@@ -14,12 +14,14 @@ import (
 	"net"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"unsafe"
 
 	"tailscale.com/hostinfo"
+	"tailscale.com/ipn"
 	"tailscale.com/tsnet"
 	"tailscale.com/types/logger"
 )
@@ -528,6 +530,47 @@ func TsnetLoopback(sd C.int, addrOut *C.char, addrLen C.size_t, proxyOut *C.char
 	out = unsafe.Slice((*byte)(unsafe.Pointer(localOut)), 33)
 	copy(out, localAPICred)
 	out[32] = '\x00'
+
+	return 0
+}
+
+//export TsnetEnableFunnelToLocalhostPlaintextHttp1
+func TsnetEnableFunnelToLocalhostPlaintextHttp1(sd C.int, localhostPort C.int) C.int {
+	s, err := getServer(sd)
+	if err != nil {
+		return s.recErr(err)
+	}
+
+	ctx := context.Background()
+	lc, err := s.s.LocalClient()
+	if err != nil {
+		return s.recErr(err)
+	}
+
+	st, err := lc.StatusWithoutPeers(ctx)
+	if err != nil {
+		return s.recErr(err)
+	}
+	domain := st.CertDomains[0]
+
+	hp := ipn.HostPort(net.JoinHostPort(domain, strconv.Itoa(443)))
+	tcpForward := fmt.Sprintf("127.0.0.1:%d", localhostPort)
+	sc := &ipn.ServeConfig{
+		TCP: map[uint16]*ipn.TCPPortHandler{
+			443: {
+				TCPForward:   tcpForward,
+				TerminateTLS: domain,
+			},
+		},
+		AllowFunnel: map[ipn.HostPort]bool{
+			hp: true,
+		},
+	}
+
+	lc.SetServeConfig(ctx, sc)
+	if !sc.AllowFunnel[hp] {
+		return s.recErr(fmt.Errorf("libtailscale: failed to enable funnel"))
+	}
 
 	return 0
 }

@@ -175,6 +175,22 @@ extern int tailscale_accept(tailscale_listener listener, tailscale_conn* conn_ou
 // Returns zero on success or -1 on error, call tailscale_errmsg for details.
 extern int tailscale_loopback(tailscale sd, char* addr_out, size_t addrlen, char* proxy_cred_out, char* local_api_cred_out);
 
+// tailscale_enable_funnel_to_localhost_plaintext_http1 configures sd to have
+// Tailscale Funnel enabled, routing requests from the public web
+// (without any authentication) down to this Tailscale node, requesting new 
+// LetsEncrypt TLS certs as needed, terminating TLS, and proxying all incoming
+// HTTPS requests to http://127.0.0.1:localhostPort without TLS. 
+//
+// There should be a plaintext HTTP/1 server listening on 127.0.0.1:localhostPort
+// or tsnet will serve HTTP 502 errors.
+//
+// Expect junk traffic from the internet from bots watching the public CT logs.
+//
+// Returns:
+// 	0     - success
+// 	-1    - other error, details printed to the tsnet logger
+extern int tailscale_enable_funnel_to_localhost_plaintext_http1(tailscale sd, int localhostPort);
+
 // tailscale_errmsg writes the details of the last error to buf.
 // 
 // After returning, buf is always NUL-terminated.
