@@ -23,6 +23,7 @@ extern int TsnetGetIps(int sd, char *buf, size_t buflen);
 extern int TsnetGetRemoteAddr(int listener, int conn, char *buf, size_t buflen);
 extern int TsnetListen(int sd, char* net, char* addr, int* listenerOut);
 extern int TsnetLoopback(int sd, char* addrOut, size_t addrLen, char* proxyOut, char* localOut);
+extern int TsnetEnableFunnelToLocalhostPlaintextHttp1(int sd, int localhostPort);
 
 tailscale tailscale_new() {
 	return TsnetNewServer();
@@ -105,4 +106,8 @@ int tailscale_loopback(tailscale sd, char* addr_out, size_t addrlen, char* proxy
 
 int tailscale_errmsg(tailscale sd, char* buf, size_t buflen) {
 	return TsnetErrmsg(sd, buf, buflen);
+}
+
+int tailscale_enable_funnel_to_localhost_plaintext_http1(tailscale sd, int localhostPort) {
+	return TsnetEnableFunnelToLocalhostPlaintextHttp1(sd, localhostPort);
 }
