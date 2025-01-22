@@ -42,6 +42,11 @@ class Tailscale
         attach_function :TsnetAccept, [:int, :pointer], :int, blocking: true
         attach_function :TsnetErrmsg, [:int, :pointer, :size_t], :int
         attach_function :TsnetLoopback, [:int, :pointer, :size_t, :pointer, :pointer], :int
+        attach_function :tailscale_control_server, [], :int
+        attach_function :tailscale_new, [:int], :int
+        attach_function :tailscale_close, [:int, :int], :int
+        attach_function :tailscale_start, [:int, :int], :int
+        attach_function :tailscale_errmsg, [:int, :int, :pointer, :size_t], :int
     end
 
     class ClosedError < StandardError
@@ -167,14 +172,26 @@ class Tailscale
     #
     # The server is not started, and no network traffic will occur until start
     # is called or network operations are used (such as dial or listen).
-    def initialize
-        @t = Libtailscale::TsnetNewServer()
+    def initialize(use_new)
+        @use_new = use_new
+        if @use_new
+            @fd = Libtailscale::tailscale_control_server()
+            print("FD is: #{@fd}\n")
+            @t = Libtailscale::tailscale_new(@fd)
+            print("T is #{@t}\n")
+        else
+            @t = Libtailscale::TsnetNewServer()
+        end
         raise Error.new("tailscale error: failed to initialize", @t) if @t < 0
     end
 
     # Start the tailscale server asynchronously.
     def start
-        Error.check self, Libtailscale::TsnetStart(@t)
+        if @use_new
+            Error.check self, Libtailscale::tailscale_start(@fd, @t)
+        else
+            Error.check self, Libtailscale::TsnetStart(@t)
+        end
     end
 
     # Bring the tailscale server up and wait for it to be usable. This method
@@ -185,8 +202,13 @@ class Tailscale
 
     # Close the tailscale server.
     def close
-        Error.check self, Libtailscale::TsnetClose(@t)
+        if @use_new
+            Error.check self, Libtailscale::tailscale_close(@fd, @t)
+        else
+            Error.check self, Libtailscale::TsnetClose(@t)
+        end
         @t = -1
+        @fd = -1
     end
 
     # Set the directory to store tailscale state in.
@@ -272,7 +294,11 @@ class Tailscale
     # +Error+ with the error message.
     def errmsg
         buf = FFI::MemoryPointer.new(:char, 1024)
-        r = Libtailscale::TsnetErrmsg(@t, buf, buf.size)
+        if @use_new
+            r = Libtailscale::tailscale_errmsg(@fd, @t, buf, buf.size)
+        else
+            r = Libtailscale::TsnetErrmsg(@t, buf, buf.size)
+        end
         if r != 0
             return "tailscale internal error: failed to get error message"
         end

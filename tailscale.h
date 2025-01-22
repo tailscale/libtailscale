@@ -28,7 +28,7 @@ typedef int tailscale;
 // tailscale_new creates a tailscale server object.
 //
 // No network connection is initialized until tailscale_start is called.
-extern tailscale tailscale_new();
+extern tailscale tailscale_new(int fd);
 
 // tailscale_start connects the server to the tailnet.
 //
@@ -38,7 +38,7 @@ extern tailscale tailscale_new();
 // See also: tailscale_up.
 //
 // Returns zero on success or -1 on error, call tailscale_errmsg for details.
-extern int tailscale_start(tailscale sd);
+extern int tailscale_start(int fd, tailscale sd);
 
 // tailscale_up connects the server to the tailnet and waits for it to be usable.
 //
@@ -53,7 +53,7 @@ extern int tailscale_up(tailscale sd);
 // 	0     - success
 // 	EBADF - sd is not a valid tailscale
 // 	-1    - other error, details printed to the tsnet logger
-extern int tailscale_close(tailscale sd);
+extern int tailscale_close(int fd, tailscale sd);
 
 // The following set tailscale configuration options.
 //
@@ -159,9 +159,9 @@ extern int tailscale_loopback(tailscale sd, char* addr_out, size_t addrlen, char
 // 	0      - success
 // 	EBADF  - sd is not a valid tailscale
 // 	ERANGE - insufficient storage for buf
-extern int tailscale_errmsg(tailscale sd, char* buf, size_t buflen);
+extern int tailscale_errmsg(int fd, tailscale sd, char* buf, size_t buflen);
 
-
+int tailscale_control_server();
 #ifdef __cplusplus
 }
 #endif

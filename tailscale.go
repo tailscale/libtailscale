@@ -102,10 +102,13 @@ func TsnetNewServer() C.int {
 
 //export TsnetStart
 func TsnetStart(sd C.int) C.int {
+    fmt.Println("TsnetStart getting server")
 	s, err := getServer(sd)
 	if err != nil {
+	    fmt.Println("TsnetStart error getting server")
 		return s.recErr(err)
 	}
+    fmt.Println("TsnetStart trying tsnet start")
 	return s.recErr(s.s.Start())
 }
 
@@ -121,24 +124,32 @@ func TsnetUp(sd C.int) C.int {
 
 //export TsnetClose
 func TsnetClose(sd C.int) C.int {
+    fmt.Println("TsnetClose acquiring lock")
 	servers.mu.Lock()
+    fmt.Println("TsnetClose lock acquired")
 	s := servers.m[sd]
 	if s != nil {
 		delete(servers.m, sd)
 	}
+    fmt.Println("TsnetClose unlocking")
 	servers.mu.Unlock()
+    fmt.Println("TsnetClose unlocked")
 
 	if s == nil {
+	    fmt.Println("TsnetClose returning C.EBADF")
 		return C.EBADF
 	}
 
 	// TODO: cancel Up
 	// TODO: close related listeners / conns.
+	fmt.Println("TsnetClose calling s.s.Close()")
 	if err := s.s.Close(); err != nil {
 		s.s.Logf("tailscale_close: failed with %v", err)
+        fmt.Println("TsnetClose returning -1")
 		return -1
 	}
 
+    fmt.Println("TsnetClose returning 0")
 	return 0
 }
 
@@ -153,6 +164,7 @@ func TsnetErrmsg(sd C.int, buf *C.char, buflen C.size_t) C.int {
 	servers.mu.Lock()
 	s := servers.m[sd]
 	servers.mu.Unlock()
+    fmt.Printf("error: %s\n", s.lastErr)
 
 	out := unsafe.Slice((*byte)(unsafe.Pointer(buf)), buflen)
 	if s == nil {
