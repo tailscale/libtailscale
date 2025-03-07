@@ -171,7 +171,7 @@ final class TailscaleKitTests: XCTestCase {
             let config = Configuration(hostName: "TSNet-Test",
                                        path: temp,
                                        authKey: authKey,
-                                       controlURL: Configuration.defaultControlURL,
+                                       controlURL: kDefaultControlURL,
                                        ephemeral: true)
 
             let ts1 = try TailscaleNode(config: config, logger: logger)

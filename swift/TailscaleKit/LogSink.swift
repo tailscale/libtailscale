@@ -1,6 +1,8 @@
 // Copyright (c) Tailscale Inc & AUTHORS
 // SPDX-License-Identifier: BSD-3-Clause
 
+import Foundation
+
 /// A generic interface for sinking log messages from the Swift wrapper
 /// and go
 public protocol LogSink: Sendable {
@@ -13,19 +15,19 @@ public protocol LogSink: Sendable {
 }
 
 /// Dumps all internal logs to NSLog and go logs to stdout
-struct DefaultLogger: LogSink {
-    var logFileHandle: Int32? = STDOUT_FILENO
+public struct DefaultLogger: LogSink {
+    public var logFileHandle: Int32? = STDOUT_FILENO
 
-    func log(_ message: String) {
+    public func log(_ message: String) {
         NSLog(message)
     }
 }
 
 /// Discards all logs
-struct BlackholeLogger: LogSink {
-    var logFileHandle: Int32?
-    
-    func log(_ message: String) {
+public struct BlackholeLogger: LogSink {
+    public var logFileHandle: Int32?
+
+    public func log(_ message: String) {
         // Go back to the Shadow!
     }
 }

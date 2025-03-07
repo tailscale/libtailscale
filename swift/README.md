@@ -14,9 +14,14 @@ Build Requirements:
 
 Building Tailscale.framework:
 
+First build the libtailscale dependecies:
+
+
+
 From /swift 
 ```
-$ make build
+$ make macos
+# make ios
 ```
 
 Will build TailscaleKit.framework into /swift/build/Build/Products.
@@ -24,7 +29,15 @@ Will build TailscaleKit.framework into /swift/build/Build/Products.
 Separate frameworks will be built for macOS and iOS.  All dependencies (libtailscale.a)
 are built automatically.  Swift 6 is supported.
 
-Alternatively, you may build from xCode using the Tailscale scheme.
+Alternatively, you may build from xCode using the Tailscale scheme but the 
+libraries must be built first (since xCode will complain about paths and
+permissions)
+
+From / 
+```
+$ make c-archive
+$ make c-archive-ios 
+```
 
 Non-apple builds are not supported (yet).  We do use URLSession and Combine though
 it is possible to purge both.

@@ -1,6 +1,7 @@
 // Copyright (c) Tailscale Inc & AUTHORS
 // SPDX-License-Identifier: BSD-3-Clause
 
+import Foundation
 import Combine
 
 /// ConnectionState indicates the state of individual TSConnection instances

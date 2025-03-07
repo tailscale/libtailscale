@@ -1,8 +1,16 @@
 // Copyright (c) Tailscale Inc & AUTHORS
 // SPDX-License-Identifier: BSD-3-Clause
 
-extension URLSessionConfiguration {
+#if os(iOS)
+import UIKit
+#endif
 
+public extension URLSessionConfiguration {
+
+    // (barnstar) TODO: kCFNetworkProxiesSOCKS* is not available on iOS
+    //                   is there another way to make this work on non desktops?
+
+    #if os(macOS)
     /// Adds the a connectionProxyDictionary to a URLSessionConfiguration to
     /// proxy all requests through the given TailscaleNode.
     ///
@@ -28,10 +36,11 @@ extension URLSessionConfiguration {
         ]
     }
 
-    static func tailscaleSession(_ node: TailscaleNode) async throws -> URLSessionConfiguration {
+    public static func tailscaleSession(_ node: TailscaleNode) async throws -> URLSessionConfiguration {
         let config = URLSessionConfiguration.default
         try await config.proxyVia(node)
         return config
     }
+    #endif
 
 }

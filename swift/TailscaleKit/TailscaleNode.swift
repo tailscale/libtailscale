@@ -1,15 +1,30 @@
 // Copyright (c) Tailscale Inc & AUTHORS
 // SPDX-License-Identifier: BSD-3-Clause
 
+public let kDefaultControlURL = "https://controlplane.tailscale.com"
+
+
 /// Configuration for a tailscale application node
 public struct Configuration: Sendable {
-    let hostName: String    ///< The hostname of the node/application instance
-    let path: String
-    let authKey: String?    ///< An auth key.  Leave empty to use web auth
-    let controlURL: String  ///< URL for Tailscale control
-    let ephemeral: Bool
+    public let hostName: String    ///< The hostname of the node/application instance
+    public let path: String
+    public let authKey: String?    ///< An auth key.  Leave empty to use web auth
+    public let controlURL: String  ///< URL for Tailscale control
+    public let ephemeral: Bool
 
-    static let defaultControlURL = "https://controlplane.tailscale.com"
+    public init(hostName: String,
+                path: String,
+                authKey: String?,
+                controlURL: String,
+                ephemeral: Bool = false)
+    {
+        self.hostName = hostName
+        self.path = path
+        self.authKey = authKey
+        self.controlURL = controlURL
+        self.ephemeral = ephemeral
+    }
+
 }
 
 /// The layer 3 protocol to use

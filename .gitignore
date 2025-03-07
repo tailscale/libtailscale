@@ -2,11 +2,14 @@ libtailscale.so
 libtailscale.a
 libtailscale.h
 libtailscale.tar*
+libtailscale_ios.a
+libtailscale_ios.h
 
 /tstestcontrol/libtstestcontrol.a
 /tstestcontrol/libtstestcontrol.h
 
 /swift/build
+**/xcuserdata/**
 
 /ruby/tmp/
 /ruby/pkg/
