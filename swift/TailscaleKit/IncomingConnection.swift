@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 import Combine
+import Foundation
 
 /// IncomingConnection is use to read incoming message from an inbound
 /// connection.   IncomingConnections are not instantiated directly,

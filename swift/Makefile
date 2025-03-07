@@ -7,14 +7,45 @@ ifeq (, $(shell which $(XCPRETTIFIER)))
         XCPRETTIFIER := cat
 endif
 
-OUTPUT_DIR=build
+# The xcodebuild schemes will run the Makefile in the root directory to build
+# the libtailscale.a and libtailscale_ios.a dependencies.
 
-build:
-	mkdir -p $(OUTPUT_DIR)
-	xcodebuild build -scheme TailscaleKit -derivedDataPath $(OUTPUT_DIR) -configuration Release -destination 'generic/platform=macOS,arch=arm64' -destination 'generic/platform=iOS' | $(XCPRETTIFIER)
+.PHONY: macos
+macos:  ## Builds TailscaleKit for macos to swift/build/Build/Products/Release
+	cd .. && make c-archive
+	mkdir -p build
+	xcodebuild build -scheme "TailscaleKit (macOS)" \
+	 -derivedDataPath build \
+	 -configuration Release \
+	 -destination 'platform=macOS,arch=arm64' | $(XCPRETTIFIER)
 
-test:
-	xcodebuild test -scheme TailscaleKitXCTests -derivedDataPath $(OUTPUT_DIR) -configuration Debug | $(XCPRETTIFIER)
+.PHONY: ios
+ios:  ## Builds TailscaleKit for iOS to swift/build/Build/Products/Release
+	cd .. && make c-archive-ios
+	mkdir -p build
+	xcodebuild build -scheme "TailscaleKit (iOS)" \
+	 -derivedDataPath build \
+	 -configuration Release \
+	 -destination 'generic/platform=iOS' | $(XCPRETTIFIER)
 
-clean:
-	rm -rf $(OUTPUT_DIR)
+.PHONY: test
+test: ## Run tests (macOS)
+	cd .. && make c-archive
+	mkdir -p build
+	xcodebuild test -scheme TailscaleKitXCTests \
+	 -derivedDataPath build \
+	 -configuration Debug \
+	 -destination 'platform=macOS,arch=arm64' | $(XCPRETTIFIER)
+
+.PHONY: clean
+clean: ## Clean up build artifacts (including the libtailscale dependencies)
+	cd .. && make clean
+	rm -rf build 
+
+.PHONY: help
+help: ## Show this help
+	@echo "\nSpecify a command. The choices are:\n"
+	@grep -hE '^[0-9a-zA-Z_-]+:.*?## .*$$' ${MAKEFILE_LIST} | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[0;36m%-12s\033[m %s\n", $$1, $$2}'
+	@echo ""
+
+.DEFAULT_GOAL := help

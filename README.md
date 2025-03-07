@@ -13,6 +13,12 @@ With the latest version of Go, run:
 go build -buildmode=c-archive
 ```
 
+or 
+
+```
+make archive
+```
+
 This will produce a `libtailscale.a` file. Link it into your binary,
 and use the `tailscale.h` header to reference it.
 
@@ -20,6 +26,12 @@ It is also possible to build a shared library using
 
 ```
 go build -buildmode=c-shared
+```
+
+or
+
+```
+make shared
 ```
 
 ## Bugs

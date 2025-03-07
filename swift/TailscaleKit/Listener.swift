@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 import Combine
+import Foundation
 
 /// A Listener is used to await incoming connections from another
 /// Tailnet node.
