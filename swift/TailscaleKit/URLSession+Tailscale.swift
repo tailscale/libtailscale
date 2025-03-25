@@ -36,7 +36,7 @@ public extension URLSessionConfiguration {
         ]
     }
 
-    public static func tailscaleSession(_ node: TailscaleNode) async throws -> URLSessionConfiguration {
+    static func tailscaleSession(_ node: TailscaleNode) async throws -> URLSessionConfiguration {
         let config = URLSessionConfiguration.default
         try await config.proxyVia(node)
         return config
