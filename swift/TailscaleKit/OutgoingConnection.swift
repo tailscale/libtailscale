@@ -21,9 +21,9 @@ public enum ListenterState {
     case failed         ///< The attempt to start the listener failed
 }
 
-typealias TailscaleHandle = Int32
-typealias TailscaleConnection = Int32
-typealias TailscaleListener = Int32
+public typealias TailscaleHandle = Int32
+public typealias TailscaleConnection = Int32
+public typealias TailscaleListener = Int32
 
 /// Outgoing connections are used to send data to other endpoints
 /// on the tailnet.
@@ -49,7 +49,7 @@ public actor OutgoingConnection {
     /// @param logger
     ///
     /// @throws TailscaleError on failure
-    init(tailscale: TailscaleHandle,
+    public init(tailscale: TailscaleHandle,
          to address: String,
          proto: NetProtocol,
          logger: LogSink) async throws {
@@ -66,7 +66,7 @@ public actor OutgoingConnection {
     /// @See tailscale_dial in Tailscale.h
     ///
     /// @throws TailscaleError on failure
-    func connect() async throws  {
+    public func connect() async throws  {
         let res = tailscale_dial(tailscale, proto.rawValue, address, &conn)
 
         guard res == 0 else {

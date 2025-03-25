@@ -45,7 +45,7 @@ public actor TailscaleNode {
 
     /// Handle to the underlying Tailscale server.  Use this when instantiating
     /// new IncomingConnections or OutgoingConnections
-    let tailscale: TailscaleHandle?
+    public let tailscale: TailscaleHandle?
 
     private let logger: LogSink?
 

@@ -10,7 +10,7 @@ public protocol LogSink: Sendable {
     /// to this.  STDOUT_FILENO or a handle to a writable file.
     var logFileHandle: Int32? { get }
 
-    /// Called for swfit interal logs.
+    /// Called for swift internal logs.
     func log(_ message: String)
 }
 

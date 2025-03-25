@@ -20,9 +20,9 @@ public actor Listener {
     ///
     /// @param tailscale A handle to a Tailscale server
     /// @param proto The ip protocol to listen for
-    /// @param address The adderss (ip:port or port) to listen on
+    /// @param address The address (ip:port or port) to listen on
     /// @param logger An optional LogSink
-    init(tailscale: TailscaleHandle,
+    public init(tailscale: TailscaleHandle,
          proto: NetProtocol,
          address: String,
          logger: LogSink? = nil) async throws {
@@ -68,7 +68,7 @@ public actor Listener {
     ///                value of Int32.max ms and supports millisecond precision per poll(2)
     /// @throws TailscaleError on failure or timeout
     /// @returns An incoming connection from which you can receive() Data
-    func accept(timeout: TimeInterval = 60) async throws -> IncomingConnection {
+    public func accept(timeout: TimeInterval = 60) async throws -> IncomingConnection {
         if timeout * 1000 > Double(Int32.max) || timeout < 0 {
             throw TailscaleError.invalidTimeout
         }
