@@ -57,17 +57,14 @@ final class TailscaleKitTests: XCTestCase {
             let lisetnerUp = expectation(description: "lisetnerUp")
 
             var listenerAddr: String?
-            var writerAddr: String?
 
             switch netType {
             case .v4:
                 listenerAddr = ts1_addr.ip4
-                writerAddr = ts2_addr.ip4
             case .v6:
                 // barnstar: Validity of listener IPs is loadbearing.  accept fails
                 // in the C code if you listen on an invalid addr.
                 listenerAddr = if let a = ts1_addr.ip6 { "[\(a)]"} else { nil }
-                writerAddr = if let a = ts2_addr.ip6 { "[\(a)]"} else { nil }
             case .none:
                 XCTFail("Invalid IP Type")
             }
@@ -149,7 +146,7 @@ final class TailscaleKitTests: XCTestCase {
             let ts1 = try TailscaleNode(config: config, logger: logger)
             try await ts1.up()
 
-            let sessionConfig = try await URLSessionConfiguration.tailscaleSession(ts1)
+            let (sessionConfig, _) = try await URLSessionConfiguration.tailscaleSession(ts1)
             let session = URLSession(configuration: sessionConfig)
 
             let url = URL(string: "https://tailscale.com")!
@@ -177,7 +174,7 @@ final class TailscaleKitTests: XCTestCase {
             let ts1 = try TailscaleNode(config: config, logger: logger)
             try await ts1.up()
 
-            let sessionConfig = try await URLSessionConfiguration.tailscaleSession(ts1)
+            let (sessionConfig, _) = try await URLSessionConfiguration.tailscaleSession(ts1)
             let session = URLSession(configuration: sessionConfig)
 
             // Replace this with the IP or fqdn of a service running on your tailnet

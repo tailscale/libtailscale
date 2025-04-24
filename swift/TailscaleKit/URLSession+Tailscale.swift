@@ -7,22 +7,15 @@ import UIKit
 
 public extension URLSessionConfiguration {
 
-    // (barnstar) TODO: kCFNetworkProxiesSOCKS* is not available on iOS
-    //                   is there another way to make this work on non desktops?
-
-    #if os(macOS)
     /// Adds the a connectionProxyDictionary to a URLSessionConfiguration to
     /// proxy all requests through the given TailscaleNode.
     ///
-    /// This can also be use to make requests to LocalAPI
-    func proxyVia(_ node: TailscaleNode) async throws  {
+    /// This can also be use to make requests to LocalAPI.  See LocalAPIClient
+    @discardableResult
+    func proxyVia(_ node: TailscaleNode) async throws -> TailscaleNode.LoopbackConfig {
         let proxyConfig = try await node.loopback()
 
-        // The address is always v4 and it's always <ip>:<port>
-        let parts = proxyConfig.address.split(separator: ":")
-        let addr = parts.first
-        let port = parts.last
-        guard parts.count == 2, let addr, let port else {
+        guard let ip = proxyConfig.ip, let port = proxyConfig.port else {
             throw TailscaleError.invalidProxyAddress
         }
 
@@ -30,17 +23,19 @@ public extension URLSessionConfiguration {
             kCFProxyTypeKey: kCFProxyTypeSOCKS,
             kCFProxyUsernameKey: "tsnet",
             kCFProxyPasswordKey: proxyConfig.proxyCredential,
-            kCFNetworkProxiesSOCKSEnable: true,
-            kCFNetworkProxiesSOCKSProxy: addr,
-            kCFNetworkProxiesSOCKSPort: port
+
+            kCFNetworkProxiesHTTPEnable: true,
+            kCFNetworkProxiesHTTPSEnable: true,
+            kCFNetworkProxiesHTTPProxy: ip,
+            kCFNetworkProxiesHTTPPort: port,
         ]
+
+        return proxyConfig
     }
 
-    static func tailscaleSession(_ node: TailscaleNode) async throws -> URLSessionConfiguration {
-        let config = URLSessionConfiguration.default
-        try await config.proxyVia(node)
-        return config
+    static func tailscaleSession(_ node: TailscaleNode) async throws -> (URLSessionConfiguration, TailscaleNode.LoopbackConfig) {
+        let session  = URLSessionConfiguration.default
+        let config = try await session.proxyVia(node)
+        return (session, config)
     }
-    #endif
-
 }

@@ -9,7 +9,7 @@ struct HelloFromTailscaleApp: App {
 
     var body: some Scene {
         WindowGroup {
-            HelloView(dialer: manager)
+            HelloView(dialer: manager, model: manager.model)
         }
     }
 }

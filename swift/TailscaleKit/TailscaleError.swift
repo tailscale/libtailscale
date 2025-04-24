@@ -3,7 +3,6 @@
 
 import Foundation
 
-
 public enum TailscaleError: Error {
     case badInterfaceHandle     ///< The tailscale handle is bad.
     case listenerClosed         ///< The listener was closed and cannot accept new connections
@@ -45,7 +44,14 @@ extension TailscaleHandle {
         }
         let res = tailscale_errmsg(self, buf, 256)
         if res != 0 {
-            return "Error fetch failure: \(res)"
+            switch res {
+            case EBADF:
+                return "Bad file descriptor"
+            case ERANGE:
+                return "Error message buffer too small"
+            default:
+                return "Error fetch failure: \(res)"
+            }
         }
         return String(cString: buf)
     }
