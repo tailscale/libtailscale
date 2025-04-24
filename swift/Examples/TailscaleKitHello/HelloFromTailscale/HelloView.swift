@@ -5,25 +5,29 @@ import SwiftUI
 
 
 struct HelloView: View {
-    @ObservedObject var model : HelloViewModel
+    @State var viewModel : HelloViewModel
     let dialer: Dialer
 
-    init(dialer: Dialer) {
+    init(dialer: Dialer, model: HelloModel) {
         self.dialer = dialer
-        self.model = HelloViewModel()
+        self.viewModel = HelloViewModel(model: model)
     }
-
 
     var body: some View {
         VStack {
             Text("TailscaleKit Sample App.  See README.md for setup instructions.")
-                .font(.title)
+                .font(.title3)
                 .padding(20)
-            Text(model.message)
-                .font(.title2)
-            Button("Phone Home!") {
-                model.runRequest(dialer)
+            Spacer(minLength: 5)
+            Text(viewModel.stateMessage)
+            Text(viewModel.peerCountMessage)
+            Spacer(minLength: 5)
+            Text(viewModel.message)
+                .font(.title3)
+            Button("Phone Home") {
+                viewModel.runRequest(dialer)
             }
+
         }
         .padding()
     }
@@ -37,5 +41,5 @@ actor PreviewDialer: Dialer {
 
 #Preview {
     let d = PreviewDialer()
-    HelloView(dialer: d)
+    HelloView(dialer: d, model: HelloModel(logger: Logger()))
 }

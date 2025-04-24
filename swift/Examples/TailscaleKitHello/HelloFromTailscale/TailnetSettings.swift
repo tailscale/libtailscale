@@ -5,8 +5,9 @@ import Foundation
 
 struct Settings {
     // Replace with an actual auth key generated from the Tailscale admin console
-    static let authKey = "tskey-auth-somekey"
+    static let authKey = "tskey-auth-your-auth-key"
     // Note: The sample has a transport exception for http on ts.net so http:// is ok...
+    // The "Phone Home" button will load the contents of this URL, it should be on your Tailnet.
     static let tailnetServer = "http://myserver.my-tailnet.ts.net"
     // Identifies this application in the Tailscale admin console.
     static let hostName = "Hello-From-Tailsacle-Sample-App"

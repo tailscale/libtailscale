@@ -138,7 +138,7 @@ typedef int tailscale_listener;
 // Returns zero on success or -1 on error, call tailscale_errmsg for details.
 extern int tailscale_listen(tailscale sd, const char* network, const char* addr, tailscale_listener* listener_out);
 
-// Returns the remote address for an incoming connection for a particular listener.  The address (eitehr ip4 or ip6)
+// Returns the remote address for an incoming connection for a particular listener.  The address (either ip4 or ip6)
 // will ge written to buf on on success.
 // Returns:
 //   0    - Success

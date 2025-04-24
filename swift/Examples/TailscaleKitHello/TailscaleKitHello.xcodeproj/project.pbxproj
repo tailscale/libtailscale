@@ -9,6 +9,8 @@
 /* Begin PBXBuildFile section */
 		C25260032D7A71E800BD3CCA /* TailscaleKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C2525FC52D7A69DE00BD3CCA /* TailscaleKit.framework */; };
 		C25260052D7A71FE00BD3CCA /* TailscaleKit.framework in CopyFiles */ = {isa = PBXBuildFile; fileRef = C2525FC52D7A69DE00BD3CCA /* TailscaleKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		C289804A2DBAA8DA0019B7EB /* TailscaleKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C28980492DBAA7E50019B7EB /* TailscaleKit.framework */; };
+		C289804B2DBAA8DA0019B7EB /* TailscaleKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = C28980492DBAA7E50019B7EB /* TailscaleKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -22,12 +24,25 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C289804C2DBAA8DA0019B7EB /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				C289804B2DBAA8DA0019B7EB /* TailscaleKit.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		C2525FC52D7A69DE00BD3CCA /* TailscaleKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = TailscaleKit.framework; path = ../../build/Build/Products/Release/TailscaleKit.framework; sourceTree = "<group>"; };
 		C2525FF12D7A70B700BD3CCA /* HelloFromTailscale.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HelloFromTailscale.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C25260082D7A7DC400BD3CCA /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		C289803E2DBA8A350019B7EB /* HelloFromTailscale_iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HelloFromTailscale_iOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C28980492DBAA7E50019B7EB /* TailscaleKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = TailscaleKit.framework; path = "../../build/Build/Products/Release-iphoneos/TailscaleKit.framework"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -38,6 +53,15 @@
 			);
 			target = C2525FF02D7A70B700BD3CCA /* HelloFromTailscale */;
 		};
+		C289803F2DBA8A360019B7EB /* Exceptions for "HelloFromTailscale" folder in "HelloFromTailscale_iOS" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Assets.xcassets,
+				Info.plist,
+				"Preview Content/Preview Assets.xcassets",
+			);
+			target = C28980342DBA8A350019B7EB /* HelloFromTailscale_iOS */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -45,6 +69,7 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				C25260072D7A7BAE00BD3CCA /* Exceptions for "HelloFromTailscale" folder in "HelloFromTailscale" target */,
+				C289803F2DBA8A360019B7EB /* Exceptions for "HelloFromTailscale" folder in "HelloFromTailscale_iOS" target */,
 			);
 			path = HelloFromTailscale;
 			sourceTree = "<group>";
@@ -57,6 +82,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				C25260032D7A71E800BD3CCA /* TailscaleKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C28980362DBA8A350019B7EB /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C289804A2DBAA8DA0019B7EB /* TailscaleKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -77,6 +110,7 @@
 			isa = PBXGroup;
 			children = (
 				C2525FF12D7A70B700BD3CCA /* HelloFromTailscale.app */,
+				C289803E2DBA8A350019B7EB /* HelloFromTailscale_iOS.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -85,6 +119,7 @@
 			isa = PBXGroup;
 			children = (
 				C2525FC52D7A69DE00BD3CCA /* TailscaleKit.framework */,
+				C28980492DBAA7E50019B7EB /* TailscaleKit.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -113,6 +148,29 @@
 			);
 			productName = HelloFromTailscale;
 			productReference = C2525FF12D7A70B700BD3CCA /* HelloFromTailscale.app */;
+			productType = "com.apple.product-type.application";
+		};
+		C28980342DBA8A350019B7EB /* HelloFromTailscale_iOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C289803B2DBA8A350019B7EB /* Build configuration list for PBXNativeTarget "HelloFromTailscale_iOS" */;
+			buildPhases = (
+				C28980352DBA8A350019B7EB /* Sources */,
+				C28980362DBA8A350019B7EB /* Frameworks */,
+				C28980382DBA8A350019B7EB /* Resources */,
+				C289804C2DBAA8DA0019B7EB /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				C2525FF22D7A70B700BD3CCA /* HelloFromTailscale */,
+			);
+			name = HelloFromTailscale_iOS;
+			packageProductDependencies = (
+			);
+			productName = HelloFromTailscale;
+			productReference = C289803E2DBA8A350019B7EB /* HelloFromTailscale_iOS.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -145,6 +203,7 @@
 			projectRoot = "";
 			targets = (
 				C2525FF02D7A70B700BD3CCA /* HelloFromTailscale */,
+				C28980342DBA8A350019B7EB /* HelloFromTailscale_iOS */,
 			);
 		};
 /* End PBXProject section */
@@ -157,10 +216,24 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C28980382DBA8A350019B7EB /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		C2525FED2D7A70B700BD3CCA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C28980352DBA8A350019B7EB /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -346,6 +419,76 @@
 			};
 			name = Release;
 		};
+		C289803C2DBA8A350019B7EB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = HelloFromTailscale/HelloFromTailscale.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"HelloFromTailscale/Preview Content\"";
+				DEVELOPMENT_TEAM = W5364U7YZB;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				FRAMEWORK_SEARCH_PATHS = "../../build/Build/Products/Release-iphoneOS";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = HelloFromTailscale/Info_iOS.plist;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.tailscale.HelloFromTailscale;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		C289803D2DBA8A350019B7EB /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = HelloFromTailscale/HelloFromTailscale.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"HelloFromTailscale/Preview Content\"";
+				DEVELOPMENT_TEAM = W5364U7YZB;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				FRAMEWORK_SEARCH_PATHS = "../../build/Build/Products/Release-iphoneOS";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = HelloFromTailscale/Info_iOS.plist;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.tailscale.HelloFromTailscale;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -363,6 +506,15 @@
 			buildConfigurations = (
 				C2525FFE2D7A70B900BD3CCA /* Debug */,
 				C2525FFF2D7A70B900BD3CCA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C289803B2DBA8A350019B7EB /* Build configuration list for PBXNativeTarget "HelloFromTailscale_iOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C289803C2DBA8A350019B7EB /* Debug */,
+				C289803D2DBA8A350019B7EB /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

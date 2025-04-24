@@ -75,6 +75,7 @@ public actor TailscaleNode {
         if let authKey = config.authKey {
             tailscale_set_authkey(tailscale, authKey)
         }
+
         tailscale_set_hostname(tailscale, config.hostName)
         tailscale_set_dir(tailscale, config.path)
         tailscale_set_control_url(tailscale, config.controlURL)
@@ -181,6 +182,24 @@ public actor TailscaleNode {
         let address: String
         let proxyCredential: String
         let localAPIKey: String
+
+        var ip: String? {
+            let parts = address.split(separator: ":")
+            let addr = parts.first
+            guard parts.count == 2, let addr else {
+                return nil
+            }
+            return String(addr)
+        }
+
+        var port: Int? {
+            let parts = address.split(separator: ":")
+            let port = parts.last
+            guard parts.count == 2, let port else {
+                return nil
+            }
+            return Int(port)
+        }
     }
 
     private var loopbackConfig: LoopbackConfig?
