@@ -6,7 +6,7 @@ libtailscale.a:
 	go build -buildmode=c-archive 
 
 libtailscale_ios.a:
-	GOOS=ios GOARCH=arm64 CGO_ENABLED=1 CC=$(PWD)/swift/script/clangwrap.sh /usr/local/go/bin/go build -v -ldflags -w -tags ios -o libtailscale_ios.a -buildmode=c-archive
+	GOOS=ios GOARCH=arm64 CGO_ENABLED=1 CC=$(PWD)/swift/script/clangwrap.sh go build -v -ldflags -w -tags ios -o libtailscale_ios.a -buildmode=c-archive
 
 .PHONY: c-archive-ios
 c-archive-ios: libtailscale_ios.a  ## Builds libtailscale_ios.a for iOS (iOS SDK required)
