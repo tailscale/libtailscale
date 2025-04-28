@@ -11,22 +11,25 @@ endif
 # the libtailscale.a and libtailscale_ios.a dependencies.
 
 .PHONY: macos
-macos:  ## Builds TailscaleKit for macos to swift/build/Build/Products/Release
+macos:  ## Builds TailscaleKit for macos to swift/build/Build/Products/Release (unsigned)
 	cd .. && make c-archive
 	mkdir -p build
 	xcodebuild build -scheme "TailscaleKit (macOS)" \
 	 -derivedDataPath build \
 	 -configuration Release \
-	 -destination 'platform=macOS,arch=arm64' | $(XCPRETTIFIER)
+	 -destination 'platform=macOS,arch=arm64' \
+	 CODE_SIGNING_ALLOWED=NO | $(XCPRETTIFIER)
 
 .PHONY: ios
-ios:  ## Builds TailscaleKit for iOS to swift/build/Build/Products/Release
+ios:  ## Builds TailscaleKit for iOS to swift/build/Build/Products/Release (unsigned)
 	cd .. && make c-archive-ios
 	mkdir -p build
 	xcodebuild build -scheme "TailscaleKit (iOS)" \
 	 -derivedDataPath build \
 	 -configuration Release \
-	 -destination 'generic/platform=iOS' | $(XCPRETTIFIER)
+	 -destination 'generic/platform=iOS' \
+	 CODE_SIGNING_ALLOWED=NO | $(XCPRETTIFIER)
+
 
 .PHONY: test
 test: ## Run tests (macOS)

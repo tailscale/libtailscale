@@ -57,6 +57,7 @@
 		C2525F4E2D7A22C100BD3CCA /* TailscaleKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TailscaleKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		C2525F532D7A258D00BD3CCA /* libtailscale_ios.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libtailscale_ios.a; path = ../libtailscale_ios.a; sourceTree = "<group>"; };
 		C28640622CCA8C9D00CD5EBC /* TailscaleKitTestHost.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TailscaleKitTestHost.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C28980E02DBFE3D40019B7EB /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
 		C2BED05C2CCFC68D004A2544 /* libtstestcontrol.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libtstestcontrol.a; path = ../tstestconrol/libtstestcontrol.a; sourceTree = "<group>"; };
 		C2E1C2DA2CC9B5A400ADC565 /* TailscaleKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TailscaleKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		C2E1C2FC2CC9B9E300ADC565 /* libtailscale.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libtailscale.a; path = ../libtailscale.a; sourceTree = "<group>"; };
@@ -172,6 +173,7 @@
 			isa = PBXGroup;
 			children = (
 				C2E3E87F2D2718D0004992A2 /* README.md */,
+				C28980E02DBFE3D40019B7EB /* Makefile */,
 				C2E1C2DC2CC9B5A400ADC565 /* TailscaleKit */,
 				C2E1C3112CCA8B7C00ADC565 /* TailscaleKitXCTests */,
 				C28640632CCA8C9D00CD5EBC /* TailscaleKitTestHost */,
@@ -467,10 +469,10 @@
 			buildSettings = {
 				ALLOW_TARGET_PLATFORM_SPECIALIZATION = YES;
 				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
-				DEVELOPMENT_TEAM = W5364U7YZB;
+				DEVELOPMENT_TEAM = "";
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
@@ -500,6 +502,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = io.tailscale.Tailscale;
 				PRODUCT_MODULE_NAME = TailscaleKit;
 				PRODUCT_NAME = TailscaleKit;
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphonesimulator iphoneos";
@@ -516,10 +519,10 @@
 			buildSettings = {
 				ALLOW_TARGET_PLATFORM_SPECIALIZATION = YES;
 				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
-				DEVELOPMENT_TEAM = W5364U7YZB;
+				DEVELOPMENT_TEAM = "";
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
@@ -549,6 +552,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = io.tailscale.Tailscale;
 				PRODUCT_MODULE_NAME = TailscaleKit;
 				PRODUCT_NAME = TailscaleKit;
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphonesimulator iphoneos";
@@ -643,10 +647,10 @@
 			buildSettings = {
 				ALLOW_TARGET_PLATFORM_SPECIALIZATION = YES;
 				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
-				DEVELOPMENT_TEAM = W5364U7YZB;
+				DEVELOPMENT_TEAM = "";
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
@@ -676,6 +680,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = io.tailscale.Tailscale;
 				PRODUCT_MODULE_NAME = TailscaleKit;
 				PRODUCT_NAME = TailscaleKit;
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = macosx;
@@ -692,10 +697,10 @@
 			buildSettings = {
 				ALLOW_TARGET_PLATFORM_SPECIALIZATION = YES;
 				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
-				DEVELOPMENT_TEAM = W5364U7YZB;
+				DEVELOPMENT_TEAM = "";
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
@@ -725,6 +730,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = io.tailscale.Tailscale;
 				PRODUCT_MODULE_NAME = TailscaleKit;
 				PRODUCT_NAME = TailscaleKit;
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = macosx;

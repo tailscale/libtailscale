@@ -19,16 +19,21 @@ public extension URLSessionConfiguration {
             throw TailscaleError.invalidProxyAddress
         }
 
-        self.connectionProxyDictionary = [
+
+        var config: [CFString: Any] = [
             kCFProxyTypeKey: kCFProxyTypeSOCKS,
             kCFProxyUsernameKey: "tsnet",
             kCFProxyPasswordKey: proxyConfig.proxyCredential,
-
             kCFNetworkProxiesHTTPEnable: true,
-            kCFNetworkProxiesHTTPSEnable: true,
             kCFNetworkProxiesHTTPProxy: ip,
             kCFNetworkProxiesHTTPPort: port,
         ]
+
+        #if os(macOS)
+        config[kCFNetworkProxiesHTTPSEnable] = true
+        #endif
+
+        self.connectionProxyDictionary = config
 
         return proxyConfig
     }
