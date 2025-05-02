@@ -20,21 +20,16 @@ public extension URLSessionConfiguration {
         }
 
 
-        var config: [CFString: Any] = [
+        let config: [CFString: Any] = [
             kCFProxyTypeKey: kCFProxyTypeSOCKS,
             kCFProxyUsernameKey: "tsnet",
             kCFProxyPasswordKey: proxyConfig.proxyCredential,
-            kCFNetworkProxiesHTTPEnable: true,
-            kCFNetworkProxiesHTTPProxy: ip,
-            kCFNetworkProxiesHTTPPort: port,
+            kCFProxyHostNameKey: ip,
+            kCFProxyPortNumberKey: port
         ]
 
-        #if os(macOS)
-        config[kCFNetworkProxiesHTTPSEnable] = true
-        #endif
-
         self.connectionProxyDictionary = config
-
+        
         return proxyConfig
     }
 

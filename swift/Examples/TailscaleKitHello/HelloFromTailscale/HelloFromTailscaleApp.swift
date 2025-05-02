@@ -5,7 +5,7 @@ import SwiftUI
 
 @main
 struct HelloFromTailscaleApp: App {
-    let manager = HelloManager()
+    let manager = HelloManager.shared
 
     var body: some Scene {
         WindowGroup {

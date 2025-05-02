@@ -25,6 +25,8 @@ protocol Dialer: Actor {
 actor HelloManager: Dialer {
     var node: TailscaleNode?
 
+    static let shared = HelloManager()
+
     let logger = Logger()
 
     let config: Configuration
@@ -110,7 +112,8 @@ actor HelloManager: Dialer {
 
             // Request a resource from the tailnet...
             let url = URL(string: Settings.tailnetServer)!
-            let req = URLRequest(url: url)
+            var req = URLRequest(url: url)
+
 
             let (data, _) = try await session.data(for: req)
             await setMessage("\(Settings.tailnetServer) says:\n \(String(data: data, encoding: .utf8) ?? "(crickets!)")")
