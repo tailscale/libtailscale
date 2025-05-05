@@ -14,7 +14,14 @@ public actor Listener {
 
     private let logger: LogSink?
 
-    @Published public var state: ListenterState = .idle
+    @Published var _state: ListenerState = .idle
+
+    public func state() -> any AsyncSequence<ListenerState, Never> {
+        $_state
+            .removeDuplicates()
+            .eraseToAnyPublisher()
+            .values
+    }
 
     /// Initializes and readies a new listener
     ///
@@ -34,13 +41,13 @@ public actor Listener {
         let res = tailscale_listen(tailscale, proto.rawValue, address, &listener)
 
         guard res == 0 else {
-            state = .failed
+            _state = .failed
             let msg = tailscale.getErrorMessage()
             let err = TailscaleError.fromPosixErrCode(res, msg)
             logger?.log("Listener failed to initialize: \(msg) (\(err.localizedDescription))")
             throw err
         }
-        state = .listening
+        _state = .listening
     }
 
     deinit {
@@ -56,7 +63,7 @@ public actor Listener {
             unistd.close(listener)
             listener = 0
         }
-        state = .closed
+        _state = .closed
     }
 
     /// Blocks and awaits a new incoming connection

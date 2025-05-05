@@ -14,12 +14,19 @@ public actor IncomingConnection {
 
     public let remoteAddress: String?
 
-    @Published public var state: ConnectionState = .idle
+    @Published var _state: ConnectionState = .idle
+
+    public func state() -> any AsyncSequence<ConnectionState, Never>  {
+        $_state
+            .removeDuplicates()
+            .eraseToAnyPublisher()
+            .values
+    }
 
     init(conn: TailscaleConnection, remoteAddress: String?, logger: LogSink? = nil) async {
         self.logger = logger
         self.conn = conn
-        self.state = .connected
+        _state = .connected
         self.remoteAddress = remoteAddress
         reader = SocketReader(conn: conn)
     }
@@ -35,13 +42,13 @@ public actor IncomingConnection {
             unistd.close(conn)
             conn = 0
         }
-        state = .closed
+        _state = .closed
     }
 
     /// Returns up to size bytes from the connection.  Blocks until
     /// data is available
     public func receive(maximumLength: Int = 4096, timeout: Int32) async throws -> Data {
-        guard state == .connected else {
+        guard _state == .connected else {
             throw TailscaleError.connectionClosed
         }
 
@@ -50,7 +57,7 @@ public actor IncomingConnection {
 
     /// Reads a complete message from the connection
     public func receiveMessage( timeout: Int32) async throws -> Data {
-        guard state == .connected else {
+        guard _state == .connected else {
             throw TailscaleError.connectionClosed
         }
 

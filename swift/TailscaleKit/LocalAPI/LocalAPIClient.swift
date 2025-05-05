@@ -5,49 +5,77 @@ import Foundation
 
 let kLocalAPIPath = "/localapi/v0/"
 
+/// LocalAPIError enumerates the various errors that may be returned when making requests
+/// to localAPI.
 public enum LocalAPIError: Error, LocalizedError {
     case localAPIBadResponse
     case localAPIStatusError(status: Int, body: String)
     case localAPIURLRequestError
     case localAPIBugReportError
     case localAPIJSONEncodeError
-    case notConnected
-    case noCredentials
-    case noSessionID
-}
-
-enum HTTPMethod: String {
-    case GET
-    case POST
-    case PATCH
-    case PUT
-    case DELETE
-}
-
-enum LocalAPIEndpoint: String {
-    case prefs = "prefs"
-    case start = "start"
-    case loginInteractive = "login-interactive"
-    case resetAuth = "reset-auth"
-    case logout = "logout"
-    case profiles = "profiles"
-    case profilesCurrent = "profiles/current"
-    case status = "status"
-    case watchIPNBus = "watch-ipn-bus"
 }
 
 public actor LocalAPIClient {
-    /// The local node for proxying requests
+    enum HTTPMethod: String {
+        case GET
+        case POST
+        case PATCH
+        case PUT
+        case DELETE
+    }
+
+    enum LocalAPIEndpoint: String {
+        case prefs = "prefs"
+        case start = "start"
+        case loginInteractive = "login-interactive"
+        case resetAuth = "reset-auth"
+        case logout = "logout"
+        case profiles = "profiles"
+        case profilesCurrent = "profiles/current"
+        case status = "status"
+        case watchIPNBus = "watch-ipn-bus"
+    }
+
+    /// The local node that will be handling our localAPI requests.
     let node: TailscaleNode
     
     let logger: LogSink?
+
     public init(localNode: TailscaleNode, logger: LogSink?) {
         self.node = localNode
         self.logger = logger
     }
 
+
+    // MARK: - IPN Bus
+
+    /// watchIPNBus subscribes to the IPN notification bus.   This is the primary mechanism that should be implemented for observing
+    /// changes to the state of the tailnet.  This opens a long-polling HTTP request and feeds events to the consumer, via the processor.
+    /// For large tailnets, or tailnets with large numbers of ephemeral devices, it is recommended that you always pass the rateLimitNetmaps
+    /// option.  Netap updates may be large and frequent and the resources required to parse the incoming JSON are non-trivial..  The
+    /// rateLimitNetmaps option will limit netmap updates to roughly one ever 3 seconds.
+    ///
+    /// You may spawn multiple bus watchers, but a single application-wide watcher with the full set of opts will often suffice.
+    ///
+    /// - Parameters:
+    ///   - mask: a mask indicating the events we wish to observe
+    ///   - consumer: an actor implementing MessageConsumer to which incoming events will be sent
+    /// - Returns: The MessageProcessor handling the incoming event stream.  This should be destroyed/stopped when the caller
+    ///            wishes to unsubscribe from the event stream.
+    public func watchIPNBus(mask: Ipn.NotifyWatchOpt, consumer: MessageConsumer) async throws -> MessageProcessor {
+        let params = [URLQueryItem(name: "mask", value: String(mask.rawValue))]
+        let (request, sessionConfig) = try await self.basicAuthURLRequest(endpoint: .watchIPNBus,
+                                                                          method: .GET,
+                                                                          params: params)
+
+        let messageProcessor = await MessageProcessor(consumer: consumer, logger: logger)
+        messageProcessor.start(request, config: sessionConfig)
+        return messageProcessor
+    }
+
     // MARK: - Prefs
 
+    /// getPrefs returns the Ipn.Prefs for the current user
     public func getPrefs() async throws -> Ipn.Prefs {
         let result =  await doSimpleAPIRequest(
             endpoint: .prefs,
@@ -63,12 +91,13 @@ public actor LocalAPIClient {
         }
     }
 
+    /// editPrefs submits a request to edit the current users prefs using the given mask
     @discardableResult
-    public func editPrefs(prefs: Ipn.MaskedPrefs) async throws -> Ipn.Prefs {
+    public func editPrefs(mask: Ipn.MaskedPrefs) async throws -> Ipn.Prefs {
         let result = await doJSONAPIRequest(
             endpoint: .prefs,
             method: .PATCH,
-            bodyAsJSON: prefs,
+            bodyAsJSON: mask,
             resultTransformer: jsonDecodeTransformer(Ipn.Prefs.self))
 
         switch result {
@@ -79,6 +108,13 @@ public actor LocalAPIClient {
             throw error
         }
     }
+
+    // NOTE:- The Account Management and Profiles APIs are not yet fully supported
+    //        via TailscaleKit.   Use with caution.  These may disappear in future
+    //        versions but are included for those that wish to experiment with
+    //        browser based auth and multi-user environments.
+    //
+    // See TailscaleNode for most of the equivalent functionality.
 
     // MARK: - Account Management
 
@@ -187,6 +223,9 @@ public actor LocalAPIClient {
 
     // MARK: - Status
 
+    /// backendStatus returns the current status of the backend.
+    ///
+    /// The majority of the information this returns can be observed using watchIPNBus.
     public func backendStatus() async throws -> IpnState.Status {
         let result =  await doSimpleAPIRequest(
             endpoint: .status,
@@ -197,33 +236,6 @@ public actor LocalAPIClient {
         case .success(let result):  return result
         case .failure(let error):  throw error
         }
-    }
-
-    // MARK: - IPN Bus
-
-    /// watchIPNBus subscribes to the IPN notification bus.
-    /// - Parameters:
-    ///   - mask: options for what notifications
-    ///   - notifyHandler: function invoked on the main thread with notify payloads as they are received
-    ///   - errorHandler: function invoked on the main thread with errors as they happen
-    /// - Returns: function that can be called to stop the subscription
-    public func watchIPNBus(mask: Ipn.NotifyWatchOpt, consumer: MessageConsumer) async -> MessageProcessor? {
-        let params = [URLQueryItem(name: "mask", value: String(mask.rawValue))]
-        do {
-            let (request, sessionConfig) = try await self.basicAuthURLRequest(endpoint: .watchIPNBus,
-                                                             method: .GET,
-                                                             params: params)
-
-            let messageProcessor = await MessageProcessor(consumer: consumer, logger: logger)
-            messageProcessor.start(request, config: sessionConfig)
-
-            return messageProcessor
-
-        } catch {
-            await consumer.error(LocalAPIError.localAPIURLRequestError)
-            return nil
-        }
-
     }
 
     // MARK: - Requests
@@ -361,14 +373,14 @@ public actor LocalAPIClient {
 
     // MARK: - Transformers
 
-    func errorTransformer(result: Result<Data, Error>) -> Error? {
+    private func errorTransformer(result: Result<Data, Error>) -> Error? {
         switch result {
         case .success: return nil
         case .failure(let error): return error
         }
     }
 
-    func jsonDecodeTransformer<T: Decodable>(_ type: T.Type) -> (_ result: Result<Data, Error>) -> Result<T, Error> {
+    private func jsonDecodeTransformer<T: Decodable>(_ type: T.Type) -> (_ result: Result<Data, Error>) -> Result<T, Error> {
         return { result in
             switch result {
             case .success(let data):

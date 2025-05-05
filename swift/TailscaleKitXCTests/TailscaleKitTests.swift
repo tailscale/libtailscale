@@ -13,7 +13,9 @@ final class TailscaleKitTests: XCTestCase {
             let res = buf.withUnsafeMutableBufferPointer { ptr in
                 return run_control(ptr.baseAddress!, 1024)
             }
-            controlURL = String(validatingCString: buf) ?? ""
+            let len = buf.firstIndex(where: { $0 == 0 }) ?? 0
+            let str = buf[0..<len]
+            controlURL = String(validating: str, as: UTF8.self) ?? ""
             guard !controlURL.isEmpty else {
                 throw TailscaleError.invalidControlURL
             }
@@ -72,7 +74,7 @@ final class TailscaleKitTests: XCTestCase {
             guard let ts1Handle = await ts1.tailscale,
                   let ts2Handle = await ts2.tailscale,
                   let listenerAddr else {
-                XCTFail()
+                XCTFail("Setup failed")
                 return
             }
 
@@ -138,6 +140,8 @@ final class TailscaleKitTests: XCTestCase {
     }
 
 
+    /// Tests that we can fetch a URL via our proxy (though this isn't a URL
+    /// on the tailnet...)
     func testProxy() async throws {
         let config = mockConfig()
         let logger = BlackholeLogger()
@@ -158,32 +162,24 @@ final class TailscaleKitTests: XCTestCase {
         }
     }
 
-
-    func exampleProxiedTailnetRequest() async throws {
-        let logger = DefaultLogger()
+    /// Tests that localAPI is functional
+    func testStatus() async throws {
+        let config = mockConfig()
+        let logger = BlackholeLogger()
 
         do {
-            let temp = getDocumentDirectoryPath().absoluteString + "tailscale\(hostCount)"
-            let authKey = "put-you-auth-key-key-here"
-            let config = Configuration(hostName: "TSNet-Test",
-                                       path: temp,
-                                       authKey: authKey,
-                                       controlURL: kDefaultControlURL,
-                                       ephemeral: true)
-
             let ts1 = try TailscaleNode(config: config, logger: logger)
             try await ts1.up()
 
-            let (sessionConfig, _) = try await URLSessionConfiguration.tailscaleSession(ts1)
-            let session = URLSession(configuration: sessionConfig)
+            // The local node should be running and online
+            let api = LocalAPIClient(localNode: ts1, logger: logger)
+            let status = try await api.backendStatus()
+            XCTAssertEqual(status.BackendState, "Running")
 
-            // Replace this with the IP or fqdn of a service running on your tailnet
-            let url = URL(string: "https://myservice.my-tailnet.ts.net")!
-            let req = URLRequest(url: url)
-            let (data, _) = try await session.data(for: req)
-
-            print("Got proxied data \(data.count)")
-            XCTAssert(data.count > 0)
+            let peerStatus = status.SelfStatus!
+            XCTAssertTrue(peerStatus.Online)
+        } catch {
+            XCTFail(error.localizedDescription)
         }
     }
 }
