@@ -56,21 +56,21 @@ actor HelloManager: Dialer {
 
     private func startTailscale() async {
         do {
-            /// This sets up a localAPI client attached to the local node.
+            // This sets up a localAPI client attached to the local node.
             let node = try setupNode()
             try await node.up()
+
+            // Create a localAPIClient instance for our local node
             let localAPIClient = LocalAPIClient(localNode: node, logger: logger)
-
-            // Once we have our local node, we can set up the local API client.
             setLocalAPIClient(localAPIClient)
-            setReady(true)
 
-            /// This sets up a bus watcher to listen for changes in the netmap.  These will be sent to the given consumer, uin
-            /// this case, a HelloModel which will keep track of the changes and publish them.
-            if let processor = await localAPIClient.watchIPNBus(mask: [.initialState, .netmap, .rateLimitNetmaps, .noPrivateKeys],
-                                                                consumer: model) {
-                setProcessor(processor)
-            }
+            // This sets up a bus watcher to listen for changes in the netmap.  These will be sent to the given consumer, in
+            // this case, a HelloModel which will keep track of the changes and publish them.
+            let busEventMask: Ipn.NotifyWatchOpt = [.initialState, .netmap, .rateLimitNetmaps, .noPrivateKeys]
+            let processor = try await localAPIClient.watchIPNBus(mask: busEventMask ,
+                                                                 consumer: model)
+            setProcessor(processor)
+            setReady(true)
         } catch {
             Logger().log("Error setting up Tailscale: \(error)")
             setReady(false)
@@ -102,7 +102,7 @@ actor HelloManager: Dialer {
                 return
             }
 
-            await setMessage("Phoning " + Settings.tailnetServer + "...")
+            await setMessage("Phoning " + Settings.tailnetURL + "...")
 
             // Create a URLSession that can access nodes on the tailnet.
             // .tailscaleSession(node) is the magic sauce.  This sends your URLRequest via
@@ -111,12 +111,11 @@ actor HelloManager: Dialer {
             let session = URLSession(configuration: sessionConfig)
 
             // Request a resource from the tailnet...
-            let url = URL(string: Settings.tailnetServer)!
-            var req = URLRequest(url: url)
-
+            let url = URL(string: Settings.tailnetURL)!
+            let req = URLRequest(url: url)
 
             let (data, _) = try await session.data(for: req)
-            await setMessage("\(Settings.tailnetServer) says:\n \(String(data: data, encoding: .utf8) ?? "(crickets!)")")
+            await setMessage("\(Settings.tailnetURL) says:\n \(String(data: data, encoding: .utf8) ?? "(crickets!)")")
         } catch {
             await setMessage("Whoops!: \(error)")
         }

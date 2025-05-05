@@ -12,9 +12,8 @@ public enum ConnectionState {
     case failed         ///< The attempt to dial the connection failed
 }
 
-
-/// ListnerState indicates the state of individual TSListener instances
-public enum ListenterState {
+/// ListenerState indicates the state of individual TSListener instances
+public enum ListenerState {
     case idle           ///< Waiting.
     case listening      ///< Listening
     case closed         ///< Closed and ready to be disposed of.

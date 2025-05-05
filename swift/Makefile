@@ -10,8 +10,13 @@ endif
 # The xcodebuild schemes will run the Makefile in the root directory to build
 # the libtailscale.a and libtailscale_ios.a dependencies.
 
+.PHONY: all
+all: test ios macos  ## Runs the tests and builds all library targets
+
 .PHONY: macos
 macos:  ## Builds TailscaleKit for macos to swift/build/Build/Products/Release (unsigned)
+	@echo
+	@echo "::: Building TailscaleKit for macOS :::"
 	cd .. && make c-archive
 	mkdir -p build
 	xcodebuild build -scheme "TailscaleKit (macOS)" \
@@ -22,6 +27,8 @@ macos:  ## Builds TailscaleKit for macos to swift/build/Build/Products/Release (
 
 .PHONY: ios
 ios:  ## Builds TailscaleKit for iOS to swift/build/Build/Products/Release (unsigned)
+	@echo
+	@echo "::: Building TailscaleKit for iOS :::"
 	cd .. && make c-archive-ios
 	mkdir -p build
 	xcodebuild build -scheme "TailscaleKit (iOS)" \
@@ -33,6 +40,8 @@ ios:  ## Builds TailscaleKit for iOS to swift/build/Build/Products/Release (unsi
 
 .PHONY: test
 test: ## Run tests (macOS)
+	@echo 
+	@echo "::: Running tests for TailscaleKit :::"
 	cd .. && make c-archive
 	mkdir -p build
 	xcodebuild test -scheme TailscaleKitXCTests \
