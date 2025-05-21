@@ -2,8 +2,8 @@ libtailscale.so
 libtailscale.a
 libtailscale.h
 libtailscale.tar*
-libtailscale_ios.a
-libtailscale_ios.h
+libtailscale_*.a
+libtailscale_*.h
 
 /tstestcontrol/libtstestcontrol.a
 /tstestcontrol/libtstestcontrol.h

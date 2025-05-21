@@ -14,38 +14,46 @@ Build Requirements:
 
 Building Tailscale.framework:
 
-First build the libtailscale dependecies:
-
-
-
 From /swift 
-```
+```bash
 $ make macos
-# make ios
+$ make ios
+$ make ios-sim
+$ make ios-fat
 ```
 
-Will build TailscaleKit.framework into /swift/build/Build/Products.
+These recipes build different variants of TailscaleKit.framework into /swift/build/Build/Products.
 
-Separate frameworks will be built for macOS and iOS.  All dependencies (libtailscale.a)
+Separate frameworks will be built for macOS and iOS and the iOS Simulator.  All dependencies (libtailscale*.a)
 are built automatically.  Swift 6 is supported.
+
+The ios and ios-sim frameworks are purposefully separated.  The former is free of any simulator segments
+and is suitable for app-store submissions.   The latter is suitable for embedding when you 
+wish to run on a simulator in dev though 'make ios-fat' will produce an xcframework bundle including
+both simulator and device frameworks for development.
+
+The frameworks are not signed and must be signed when they are embedded.
 
 Alternatively, you may build from xCode using the Tailscale scheme but the 
 libraries must be built first (since xCode will complain about paths and
 permissions)
 
-From / 
-```
+To build only the static libraries, from / 
+```bash
 $ make c-archive
 $ make c-archive-ios 
+$ make c-archive-ios-sim
 ```
 
-Non-apple builds are not supported (yet).  We do use URLSession and Combine though
-it is possible to purge both.
+If you're writing pure C, or C++, link these and use the generated tailscale.h header.  
+make c-archive builds for the local machine architecture/platform (arm64 macOS from a mac)
+
+Non-apple swift builds are not supported (yet) but should be possible with a little tweaking.
 
 ## Tests
 
 From /swift
-```
+```bash
 $ make test
 ```
 
@@ -53,16 +61,12 @@ $ make test
 ## Usage
 
 Nodes need to be authorized in order to function. Set an auth key via
-the config.authKey parameter, or watch the log stream and respond to the printed
-authorization URL.  
+the config.authKey parameter, or watch the ipn bus (see the example) for
+the browseToURL field for interactive web-based auth.
 
 Here's a working example using an auth key:
 
 ```Swift
-
-// Configures a Tailscale node and starts it up.  The node here (and the key we would use to
-// authenticate it) are marked as 'ephemeral' - meaning that the node will be disposed of as
-// soon as it goes offline.
 func start() -> TailscaleNode {
     let dataDir = getDocumentDirectoryPath().absoluteString + "tailscale"
     let authKey = "tsnet-auth-put-your-auth-key-key-here"
@@ -70,7 +74,7 @@ func start() -> TailscaleNode {
                                path: dataDir,
                                authKey: authKey,
                                controlURL: Configuration.defaultControlURL,
-                               ephemeral: true)
+                               ephemeral: false)
 
     // The logger is configurable.  The default will just print.
     let node = try TailscaleNode(config: config, logger: DefaultLogger())
@@ -94,7 +98,18 @@ func fetchURL(_ url: URL, tailscale: TailscaleNode) async throws -> Data {
 }
 ```
 
-See the [TailscaleKitTests](./Tests/TailscaleKitTests/TailscaleKitTests.swift) for more examples.
+The "node" created here should show up in the Tailscale admin panel as "TSNet-Test"
+
+### LocalAPI
+
+TailscaleKit.framework also includes a functional (though somewhat incomplete) implementation of 
+LocalAPI which can be used to track the state of the embedded tailscale instance in much greater
+detail.
+
+### Examples
+
+See the TailscaleKitHello example for a relatively complete implementation demonstrating proxied
+HTTP and usage of LocalAPI to track the tailnet state.
 
 ## Contributing
 
