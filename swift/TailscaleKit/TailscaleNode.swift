@@ -179,11 +179,11 @@ public actor TailscaleNode {
     }
 
     public struct LoopbackConfig: Sendable {
-        let address: String
-        let proxyCredential: String
-        let localAPIKey: String
+        public let address: String
+        public let proxyCredential: String
+        public let localAPIKey: String
 
-        var ip: String? {
+        public var ip: String? {
             let parts = address.split(separator: ":")
             let addr = parts.first
             guard parts.count == 2, let addr else {
@@ -192,7 +192,7 @@ public actor TailscaleNode {
             return String(addr)
         }
 
-        var port: Int? {
+        public var port: Int? {
             let parts = address.split(separator: ":")
             let port = parts.last
             guard parts.count == 2, let port else {

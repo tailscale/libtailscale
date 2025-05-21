@@ -11,12 +11,12 @@ endif
 # the libtailscale.a and libtailscale_ios.a dependencies.
 
 .PHONY: all
-all: test ios macos  ## Runs the tests and builds all library targets
+all: test ios macos ios-fat  ## Runs the tests and builds all library targets
 
 .PHONY: macos
 macos:  ## Builds TailscaleKit for macos to swift/build/Build/Products/Release (unsigned)
 	@echo
-	@echo "::: Building TailscaleKit for macOS :::"
+	@echo "::: Building TailscaleKit.framework for macOS :::"
 	cd .. && make c-archive
 	mkdir -p build
 	xcodebuild build -scheme "TailscaleKit (macOS)" \
@@ -26,9 +26,9 @@ macos:  ## Builds TailscaleKit for macos to swift/build/Build/Products/Release (
 	 CODE_SIGNING_ALLOWED=NO | $(XCPRETTIFIER)
 
 .PHONY: ios
-ios:  ## Builds TailscaleKit for iOS to swift/build/Build/Products/Release (unsigned)
+ios:  ## Builds TailscaleKit for iOS to swift/build/Build/Products/Release-iphoneos (unsigned)
 	@echo
-	@echo "::: Building TailscaleKit for iOS :::"
+	@echo "::: Building TailscaleKit.framework for iOS :::"
 	cd .. && make c-archive-ios
 	mkdir -p build
 	xcodebuild build -scheme "TailscaleKit (iOS)" \
@@ -37,6 +37,27 @@ ios:  ## Builds TailscaleKit for iOS to swift/build/Build/Products/Release (unsi
 	 -destination 'generic/platform=iOS' \
 	 CODE_SIGNING_ALLOWED=NO | $(XCPRETTIFIER)
 
+.PHONY: ios-sim
+ios-sim:  ## Builds TailscaleKit for iOS to swift/build/Build/Products/Release-iphonesimulator (unsigned)
+	@echo
+	@echo "::: Building TailscaleKit.framework for iOS Simulator :::"
+	cd .. && make c-archive-ios-sim
+	mkdir -p build
+	xcodebuild build -scheme "TailscaleKit (Simulator)" \
+	 -derivedDataPath build \
+	 -configuration Release \
+	 -destination 'generic/platform=iOS Simulator' \
+	 CODE_SIGNING_ALLOWED=NO | $(XCPRETTIFIER)
+
+.PHONY: ios-fat
+ios-fat: ios-sim ios ## Builds TailscaleKit.xcframework to swift/build/Build/Products/Release-iphonefat
+	@echo 
+	@echo "::: Building TailscaleKit.xcframework for ios and ios-simulator :::"
+	mkdir -p ./build/Build/Products/Release-iphonefat
+	xcodebuild -create-xcframework \
+		-framework ./build/Build/Products/Release-iphoneos/TailscaleKit.framework \
+		-framework ./build/Build/Products/Release-iphonesimulator/TailscaleKit.framework \
+		-output ./build/Build/Products/Release-iphonefat/TailscaleKit.xcframework
 
 .PHONY: test
 test: ## Run tests (macOS)

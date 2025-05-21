@@ -9,8 +9,8 @@
 /* Begin PBXBuildFile section */
 		C25260032D7A71E800BD3CCA /* TailscaleKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C2525FC52D7A69DE00BD3CCA /* TailscaleKit.framework */; };
 		C25260052D7A71FE00BD3CCA /* TailscaleKit.framework in CopyFiles */ = {isa = PBXBuildFile; fileRef = C2525FC52D7A69DE00BD3CCA /* TailscaleKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		C289804A2DBAA8DA0019B7EB /* TailscaleKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C28980492DBAA7E50019B7EB /* TailscaleKit.framework */; };
-		C289804B2DBAA8DA0019B7EB /* TailscaleKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = C28980492DBAA7E50019B7EB /* TailscaleKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		C2CE237E2DD7756B0096C105 /* TailscaleKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C2CE23762DD76A5C0096C105 /* TailscaleKit.framework */; };
+		C2ED636C2DDE3C1400297161 /* TailscaleKit.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = C2ED636B2DDE3C1400297161 /* TailscaleKit.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -30,7 +30,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				C289804B2DBAA8DA0019B7EB /* TailscaleKit.framework in Embed Frameworks */,
+				C2ED636C2DDE3C1400297161 /* TailscaleKit.xcframework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -43,16 +43,11 @@
 		C25260082D7A7DC400BD3CCA /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		C289803E2DBA8A350019B7EB /* HelloFromTailscale_iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HelloFromTailscale_iOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C28980492DBAA7E50019B7EB /* TailscaleKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = TailscaleKit.framework; path = "../../build/Build/Products/Release-iphoneos/TailscaleKit.framework"; sourceTree = "<group>"; };
+		C2CE23762DD76A5C0096C105 /* TailscaleKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = TailscaleKit.framework; path = "../../build/Build/Products/Release-iphonesimulator/TailscaleKit.framework"; sourceTree = "<group>"; };
+		C2ED636B2DDE3C1400297161 /* TailscaleKit.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = TailscaleKit.xcframework; path = "../../build/Build/Products/Release-iphonefat/TailscaleKit.xcframework"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		C25260072D7A7BAE00BD3CCA /* Exceptions for "HelloFromTailscale" folder in "HelloFromTailscale" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-			);
-			target = C2525FF02D7A70B700BD3CCA /* HelloFromTailscale */;
-		};
 		C289803F2DBA8A360019B7EB /* Exceptions for "HelloFromTailscale" folder in "HelloFromTailscale_iOS" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -62,13 +57,20 @@
 			);
 			target = C28980342DBA8A350019B7EB /* HelloFromTailscale_iOS */;
 		};
+		C2CE23752DD76A330096C105 /* Exceptions for "HelloFromTailscale" folder in "HelloFromTailscale" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info_iOS.plist,
+			);
+			target = C2525FF02D7A70B700BD3CCA /* HelloFromTailscale */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		C2525FF22D7A70B700BD3CCA /* HelloFromTailscale */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				C25260072D7A7BAE00BD3CCA /* Exceptions for "HelloFromTailscale" folder in "HelloFromTailscale" target */,
+				C2CE23752DD76A330096C105 /* Exceptions for "HelloFromTailscale" folder in "HelloFromTailscale" target */,
 				C289803F2DBA8A360019B7EB /* Exceptions for "HelloFromTailscale" folder in "HelloFromTailscale_iOS" target */,
 			);
 			path = HelloFromTailscale;
@@ -89,7 +91,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				C289804A2DBAA8DA0019B7EB /* TailscaleKit.framework in Frameworks */,
+				C2CE237E2DD7756B0096C105 /* TailscaleKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -118,6 +120,8 @@
 		C2525FC42D7A69DE00BD3CCA /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				C2ED636B2DDE3C1400297161 /* TailscaleKit.xcframework */,
+				C2CE23762DD76A5C0096C105 /* TailscaleKit.framework */,
 				C2525FC52D7A69DE00BD3CCA /* TailscaleKit.framework */,
 				C28980492DBAA7E50019B7EB /* TailscaleKit.framework */,
 			);
@@ -374,7 +378,7 @@
 				DEVELOPMENT_TEAM = W5364U7YZB;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
-				FRAMEWORK_SEARCH_PATHS = "../../build/Build/**";
+				FRAMEWORK_SEARCH_PATHS = ../../build/Build;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = HelloFromTailscale/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -403,7 +407,7 @@
 				DEVELOPMENT_TEAM = W5364U7YZB;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
-				FRAMEWORK_SEARCH_PATHS = "../../build/Build/**";
+				FRAMEWORK_SEARCH_PATHS = ../../build/Build;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = HelloFromTailscale/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -432,7 +436,7 @@
 				DEVELOPMENT_TEAM = W5364U7YZB;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
-				FRAMEWORK_SEARCH_PATHS = "../../build/Build/Products/Release-iphoneOS";
+				FRAMEWORK_SEARCH_PATHS = "../../build/Build/Products/Release-iphonefat";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = HelloFromTailscale/Info_iOS.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -467,7 +471,7 @@
 				DEVELOPMENT_TEAM = W5364U7YZB;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
-				FRAMEWORK_SEARCH_PATHS = "../../build/Build/Products/Release-iphoneOS";
+				FRAMEWORK_SEARCH_PATHS = "../../build/Build/Products/Release-iphonefat";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = HelloFromTailscale/Info_iOS.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";

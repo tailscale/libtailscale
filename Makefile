@@ -6,10 +6,20 @@ libtailscale.a:
 	go build -buildmode=c-archive 
 
 libtailscale_ios.a:
-	GOOS=ios GOARCH=arm64 CGO_ENABLED=1 CC=$(PWD)/swift/script/clangwrap.sh go build -v -ldflags -w -tags ios -o libtailscale_ios.a -buildmode=c-archive
+	GOOS=ios GOARCH=arm64 CGO_ENABLED=1 CC=$(PWD)/swift/script/clangwrap-ios.sh go build -v -ldflags -w -tags ios -o libtailscale_ios.a -buildmode=c-archive
+
+libtailscale_ios_sim_arm64.a:
+	GOOS=ios GOARCH=arm64 CGO_ENABLED=1 CC=$(PWD)/swift/script/clangwrap-ios-sim-arm.sh go build -v -ldflags -w -tags ios -o libtailscale_ios_sim_arm64.a -buildmode=c-archive
+
+libtailscale_ios_sim_x86_64.a:
+	GOOS=ios GOARCH=amd64 CGO_ENABLED=1 CC=$(PWD)/swift/script/clangwrap-ios-sim-x86.sh go build -v -ldflags -w -tags ios -o libtailscale_ios_sim_x86_64.a -buildmode=c-archive
 
 .PHONY: c-archive-ios
 c-archive-ios: libtailscale_ios.a  ## Builds libtailscale_ios.a for iOS (iOS SDK required)
+
+.PHONY: c-archive-ios-sim
+c-archive-ios-sim: libtailscale_ios_sim_arm64.a libtailscale_ios_sim_x86_64.a ## Builds a fat binary for iOS (iOS SDK required)
+	lipo -create -output libtailscale_ios_sim.a libtailscale_ios_sim_x86_64.a libtailscale_ios_sim_arm64.a
 
 .PHONY: c-archive 
 c-archive: libtailscale.a  ## Builds libtailscale.a for the target platform
@@ -20,10 +30,8 @@ shared: ## Builds libtailscale.so for the target platform
 
 .PHONY: clean
 clean: ## Clean up build artifacts
-	rm -f libtailscale.a
-	rm -f libtailscale_ios.a
-	rm -f libtailscale.h
-	rm -f libtailscale_ios.h
+	rm -f libtailscale*.h
+	rm -f libtailscale*.a
 
 .PHONY: help
 help: ## Show this help
