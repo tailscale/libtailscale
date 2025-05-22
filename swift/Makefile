@@ -63,12 +63,20 @@ ios-fat: ios-sim ios ## Builds TailscaleKit.xcframework to swift/build/Build/Pro
 test: ## Run tests (macOS)
 	@echo 
 	@echo "::: Running tests for TailscaleKit :::"
+	cd ../tstestcontrol && make all
 	cd .. && make c-archive
 	mkdir -p build
-	xcodebuild test -scheme TailscaleKitXCTests \
+	xcodebuild build-for-testing -scheme TailscaleKitXCTests \
 	 -derivedDataPath build \
 	 -configuration Debug \
-	 -destination 'platform=macOS,arch=arm64' | $(XCPRETTIFIER)
+	 -quiet \
+	 -destination 'platform=macOS,arch=arm64' \
+	 CODE_SIGNING_ALLOWED=NO
+	xcodebuild test-without-building  -scheme TailscaleKitXCTests \
+	 -derivedDataPath build \
+	 -configuration Debug \
+	 -destination 'platform=macOS,arch=arm64' \
+	 CODE_SIGNING_ALLOWED=NO
 
 .PHONY: clean
 clean: ## Clean up build artifacts (including the libtailscale dependencies)

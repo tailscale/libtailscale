@@ -24,20 +24,13 @@
 
 /* Begin PBXBuildFile section */
 		C2525F542D7A258D00BD3CCA /* libtailscale_ios.a in Frameworks */ = {isa = PBXBuildFile; fileRef = C2525F532D7A258D00BD3CCA /* libtailscale_ios.a */; };
-		C2BED05D2CCFC68D004A2544 /* libtstestcontrol.a in Frameworks */ = {isa = PBXBuildFile; fileRef = C2BED05C2CCFC68D004A2544 /* libtstestcontrol.a */; };
 		C2E1C30B2CC9EF1A00ADC565 /* libtailscale.a in Frameworks */ = {isa = PBXBuildFile; fileRef = C2E1C2FC2CC9B9E300ADC565 /* libtailscale.a */; };
 		C2E1C3142CCA8B7C00ADC565 /* TailscaleKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C2E1C2DA2CC9B5A400ADC565 /* TailscaleKit.framework */; };
 		C2ED636A2DDE346900297161 /* libtailscale_ios_sim.a in Frameworks */ = {isa = PBXBuildFile; fileRef = C2CE21942DD67A170096C105 /* libtailscale_ios_sim.a */; };
+		C2ED64162DDF77B300297161 /* libtstestcontrol.a in Frameworks */ = {isa = PBXBuildFile; fileRef = C2ED64152DDF77B300297161 /* libtstestcontrol.a */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		C286408D2CCA8CB600CD5EBC /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = C2E1C2D12CC9B5A400ADC565 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = C28640612CCA8C9D00CD5EBC;
-			remoteInfo = TailscaleTestHost;
-		};
 		C2BED05A2CCF308D004A2544 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = C2E1C2D12CC9B5A400ADC565 /* Project object */;
@@ -57,15 +50,14 @@
 /* Begin PBXFileReference section */
 		C2525F4E2D7A22C100BD3CCA /* TailscaleKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TailscaleKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		C2525F532D7A258D00BD3CCA /* libtailscale_ios.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libtailscale_ios.a; path = ../libtailscale_ios.a; sourceTree = "<group>"; };
-		C28640622CCA8C9D00CD5EBC /* TailscaleKitTestHost.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TailscaleKitTestHost.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C28980E02DBFE3D40019B7EB /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
-		C2BED05C2CCFC68D004A2544 /* libtstestcontrol.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libtstestcontrol.a; path = ../tstestconrol/libtstestcontrol.a; sourceTree = "<group>"; };
 		C2CE21942DD67A170096C105 /* libtailscale_ios_sim.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libtailscale_ios_sim.a; path = ../libtailscale_ios_sim.a; sourceTree = "<group>"; };
 		C2E1C2DA2CC9B5A400ADC565 /* TailscaleKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TailscaleKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		C2E1C2FC2CC9B9E300ADC565 /* libtailscale.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libtailscale.a; path = ../libtailscale.a; sourceTree = "<group>"; };
 		C2E1C3102CCA8B7C00ADC565 /* TailscaleKitXCTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TailscaleKitXCTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C2E3E87F2D2718D0004992A2 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		C2ED635B2DDE33B700297161 /* TailscaleKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TailscaleKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		C2ED64152DDF77B300297161 /* libtstestcontrol.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libtstestcontrol.a; path = ../tstestcontrol/libtstestcontrol.a; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -88,13 +80,6 @@
 				TailscaleKit.h,
 			);
 			target = C2E1C2D92CC9B5A400ADC565 /* TailscaleKit macOS */;
-		};
-		C2E3E87E2D2711BF004992A2 /* Exceptions for "TailscaleKitTestHost" folder in "TailscaleKitTestHost" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-			);
-			target = C28640612CCA8C9D00CD5EBC /* TailscaleKitTestHost */;
 		};
 		C2ED635C2DDE33B700297161 /* Exceptions for "TailscaleKit" folder in "TailscaleKit iOS Sim" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
@@ -119,14 +104,6 @@
 /* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		C28640632CCA8C9D00CD5EBC /* TailscaleKitTestHost */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				C2E3E87E2D2711BF004992A2 /* Exceptions for "TailscaleKitTestHost" folder in "TailscaleKitTestHost" target */,
-			);
-			path = TailscaleKitTestHost;
-			sourceTree = "<group>";
-		};
 		C2E1C2DC2CC9B5A400ADC565 /* TailscaleKit */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -156,13 +133,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		C286405F2CCA8C9D00CD5EBC /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		C2E1C2D72CC9B5A400ADC565 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -175,8 +145,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				C2BED05D2CCFC68D004A2544 /* libtstestcontrol.a in Frameworks */,
 				C2E1C3142CCA8B7C00ADC565 /* TailscaleKit.framework in Frameworks */,
+				C2ED64162DDF77B300297161 /* libtstestcontrol.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -198,7 +168,6 @@
 				C28980E02DBFE3D40019B7EB /* Makefile */,
 				C2E1C2DC2CC9B5A400ADC565 /* TailscaleKit */,
 				C2E1C3112CCA8B7C00ADC565 /* TailscaleKitXCTests */,
-				C28640632CCA8C9D00CD5EBC /* TailscaleKitTestHost */,
 				C2E1C2FB2CC9B9E300ADC565 /* Frameworks */,
 				C2E1C2DB2CC9B5A400ADC565 /* Products */,
 			);
@@ -209,7 +178,6 @@
 			children = (
 				C2E1C2DA2CC9B5A400ADC565 /* TailscaleKit.framework */,
 				C2E1C3102CCA8B7C00ADC565 /* TailscaleKitXCTests.xctest */,
-				C28640622CCA8C9D00CD5EBC /* TailscaleKitTestHost.app */,
 				C2525F4E2D7A22C100BD3CCA /* TailscaleKit.framework */,
 				C2ED635B2DDE33B700297161 /* TailscaleKit.framework */,
 			);
@@ -219,9 +187,9 @@
 		C2E1C2FB2CC9B9E300ADC565 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				C2ED64152DDF77B300297161 /* libtstestcontrol.a */,
 				C2CE21942DD67A170096C105 /* libtailscale_ios_sim.a */,
 				C2525F532D7A258D00BD3CCA /* libtailscale_ios.a */,
-				C2BED05C2CCFC68D004A2544 /* libtstestcontrol.a */,
 				C2E1C2FC2CC9B9E300ADC565 /* libtailscale.a */,
 			);
 			name = Frameworks;
@@ -277,28 +245,6 @@
 			productReference = C2525F4E2D7A22C100BD3CCA /* TailscaleKit.framework */;
 			productType = "com.apple.product-type.framework";
 		};
-		C28640612CCA8C9D00CD5EBC /* TailscaleKitTestHost */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = C28640842CCA8C9E00CD5EBC /* Build configuration list for PBXNativeTarget "TailscaleKitTestHost" */;
-			buildPhases = (
-				C286405E2CCA8C9D00CD5EBC /* Sources */,
-				C286405F2CCA8C9D00CD5EBC /* Frameworks */,
-				C28640602CCA8C9D00CD5EBC /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				C28640632CCA8C9D00CD5EBC /* TailscaleKitTestHost */,
-			);
-			name = TailscaleKitTestHost;
-			packageProductDependencies = (
-			);
-			productName = TailscaleTestHost;
-			productReference = C28640622CCA8C9D00CD5EBC /* TailscaleKitTestHost.app */;
-			productType = "com.apple.product-type.application";
-		};
 		C2E1C2D92CC9B5A400ADC565 /* TailscaleKit macOS */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = C2E1C2ED2CC9B5A400ADC565 /* Build configuration list for PBXNativeTarget "TailscaleKit macOS" */;
@@ -335,7 +281,6 @@
 			dependencies = (
 				C2BED05B2CCF308D004A2544 /* PBXTargetDependency */,
 				C2E1C3162CCA8B7C00ADC565 /* PBXTargetDependency */,
-				C286408E2CCA8CB600CD5EBC /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				C2E1C3112CCA8B7C00ADC565 /* TailscaleKitXCTests */,
@@ -380,15 +325,11 @@
 				LastSwiftUpdateCheck = 1610;
 				LastUpgradeCheck = 1610;
 				TargetAttributes = {
-					C28640612CCA8C9D00CD5EBC = {
-						CreatedOnToolsVersion = 16.1;
-					};
 					C2E1C2D92CC9B5A400ADC565 = {
 						CreatedOnToolsVersion = 16.1;
 					};
 					C2E1C30F2CCA8B7C00ADC565 = {
 						CreatedOnToolsVersion = 16.1;
-						TestTargetID = C28640612CCA8C9D00CD5EBC;
 					};
 				};
 			};
@@ -410,7 +351,6 @@
 				C2525F432D7A22C100BD3CCA /* TailscaleKit iOS */,
 				C2ED63522DDE33B700297161 /* TailscaleKit iOS Sim */,
 				C2E1C30F2CCA8B7C00ADC565 /* TailscaleKitXCTests */,
-				C28640612CCA8C9D00CD5EBC /* TailscaleKitTestHost */,
 				C2BED0552CCF3031004A2544 /* libtstestcontrol */,
 			);
 		};
@@ -418,13 +358,6 @@
 
 /* Begin PBXResourcesBuildPhase section */
 		C2525F4A2D7A22C100BD3CCA /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		C28640602CCA8C9D00CD5EBC /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -484,13 +417,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		C286405E2CCA8C9D00CD5EBC /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		C2E1C2D62CC9B5A400ADC565 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -515,11 +441,6 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		C286408E2CCA8CB600CD5EBC /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = C28640612CCA8C9D00CD5EBC /* TailscaleKitTestHost */;
-			targetProxy = C286408D2CCA8CB600CD5EBC /* PBXContainerItemProxy */;
-		};
 		C2BED05B2CCF308D004A2544 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = C2BED0552CCF3031004A2544 /* libtstestcontrol */;
@@ -630,66 +551,6 @@
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
 				XROS_DEPLOYMENT_TARGET = 2.1;
-			};
-			name = Release;
-		};
-		C28640852CCA8C9E00CD5EBC /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = TailscaleKitTestHost/TailscaleKitTestHost.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_ASSET_PATHS = "";
-				DEVELOPMENT_TEAM = W5364U7YZB;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = TailscaleKitTestHost/Info.plist;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = io.tailscale.TailscaleTestHost;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-			};
-			name = Debug;
-		};
-		C28640862CCA8C9E00CD5EBC /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = TailscaleKitTestHost/TailscaleKitTestHost.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_ASSET_PATHS = "";
-				DEVELOPMENT_TEAM = W5364U7YZB;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = TailscaleKitTestHost/Info.plist;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = io.tailscale.TailscaleTestHost;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
 		};
@@ -1024,7 +885,6 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_OBJC_BRIDGING_HEADER = "$(SRCROOT)/TailscaleKitXCTests/Test-Bridging-Header.h";
 				SWIFT_VERSION = 6.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TailscaleKitTestHost.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/TailscaleKitTestHost";
 			};
 			name = Debug;
 		};
@@ -1045,7 +905,6 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_OBJC_BRIDGING_HEADER = "$(SRCROOT)/TailscaleKitXCTests/Test-Bridging-Header.h";
 				SWIFT_VERSION = 6.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TailscaleKitTestHost.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/TailscaleKitTestHost";
 			};
 			name = Release;
 		};
@@ -1157,15 +1016,6 @@
 			buildConfigurations = (
 				C2525F4C2D7A22C100BD3CCA /* Debug */,
 				C2525F4D2D7A22C100BD3CCA /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		C28640842CCA8C9E00CD5EBC /* Build configuration list for PBXNativeTarget "TailscaleKitTestHost" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				C28640852CCA8C9E00CD5EBC /* Debug */,
-				C28640862CCA8C9E00CD5EBC /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
