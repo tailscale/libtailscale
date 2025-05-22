@@ -1,0 +1,24 @@
+name: swift
+
+on: [push]
+
+jobs:
+  build:
+
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: "1.24"
+
+      - name: Test
+        run: cd swift && make test
+
+      - name: iOS 
+        run: cd swift && make ios-fat
+
+      - name: macos 
+        run: cd swift && make macos 
