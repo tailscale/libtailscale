@@ -144,6 +144,18 @@ impl TSNet {
 
         Ok(Self { server })
     }
+
+    /// Connects the server to the tailnet and waits for it to be usable.
+    /// To cancel an in-progress call to up, use `close`.
+    pub fn up(&mut self) -> Result<(), String> {
+        let result = unsafe { bindings::tailscale_up(self.server) };
+
+        if result != 0 {
+            Err(tailscale_error_msg(self.server)?)
+        } else {
+            Ok(())
+        }
+    }
 }
 
 /// Drop the TSNet instance
