@@ -527,6 +527,7 @@ fn set_log_fd(server: TailscaleBinding, fd: i32) -> Result<(), String> {
     Ok(())
 }
 
+/// Get the last error message from the tailscale instance
 fn tailscale_error_msg(server: TailscaleBinding) -> Result<String, String> {
     let mut buffer = vec![0u8; 2048];
     let result = unsafe {
