@@ -169,6 +169,21 @@ impl TSNet {
             Ok(())
         }
     }
+
+    /// Connects the server to the tailnet.
+    /// Calling this function is optional as it will be called by the first use
+    /// of listen or dial on a server.
+    ///
+    /// See also `up`
+    pub fn start(&mut self) -> Result<(), String> {
+        let result = unsafe { bindings::tailscale_start(self.server) };
+
+        if result != 0 {
+            Err(tailscale_error_msg(self.server)?)
+        } else {
+            Ok(())
+        }
+    }
 }
 
 /// Drop the TSNet instance
