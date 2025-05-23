@@ -6,6 +6,10 @@ mod bindings {
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
 
+const ERANGE: i32 = 34;
+const EBADF: i32 = 9;
+const INET6_ADDRSTRLEN: usize = 46;
+
 /// A TailscaleListener is a socket on the tailnet listening for connections.
 ///
 /// It is much like allocating a system socket(2) and calling listen(2).
