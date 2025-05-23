@@ -373,6 +373,27 @@ impl TSNet {
             local_api_cred_out.to_string_lossy().into_owned(),
         ))
     }
+
+    /// Configures the server to have Tailscale Funnel enabled,
+    /// routing requests from the public web
+    /// (without any authentication) down to this Tailscale node, requesting new
+    /// LetsEncrypt TLS certs as needed, terminating TLS, and proxying all incoming
+    /// HTTPS requests to http:///127.0.0.1:localhostPort without TLS.
+    ///
+    /// There should be a plaintext HTTP/1 server listening on 127.0.0.1:localhostPort
+    /// or tsnet will serve HTTP 502 errors.
+    ///
+    /// Expect junk traffic from the internet from bots watching the public CT logs.
+    pub fn enable_funnel_to_localhost_plaintext_http1(&self, port: i32) -> Result<(), String> {
+        let result = unsafe {
+            bindings::tailscale_enable_funnel_to_localhost_plaintext_http1(self.server, port)
+        };
+        if result != 0 {
+            return Err(tailscale_error_msg(self.server)?);
+        }
+
+        Ok(())
+    }
 }
 
 /// Drop the TSNet instance
