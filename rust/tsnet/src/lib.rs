@@ -534,7 +534,7 @@ fn tailscale_error_msg(server: TailscaleBinding) -> Result<String, String> {
     };
 
     if result != 0 {
-        return Err(tailscale_error_msg(server)?);
+        return Err("Unknown error".to_string());
     }
 
     let message = unsafe { CStr::from_ptr(buffer.as_ptr() as *const c_char) };
