@@ -317,6 +317,62 @@ impl TSNet {
             .to_string();
         Ok(addr_string)
     }
+
+    /// Starts a loopback address server.
+    ///
+    /// The server has multiple functions.
+    ///
+    /// It can be used as a SOCKS5 proxy onto the tailnet.
+    /// Authentication is required with the username "tsnet" and
+    /// the value of proxy_cred used as the password.
+    ///
+    /// The HTTP server also serves out the "LocalAPI" on /localapi.
+    /// As the LocalAPI is powerful, access to endpoints requires BOTH passing a
+    /// "Sec-Tailscale: localapi" HTTP header and passing local_api_cred as
+    /// the basic auth password.
+    ///
+    /// The pointers proxy_cred_out and local_api_cred_out must be non-NIL
+    /// and point to arrays that can hold 33 bytes. The first 32 bytes are
+    /// the credential and the final byte is a NUL terminator.
+    ///
+    /// If tailscale_loopback returns, then addr_our, proxy_cred_out,
+    /// and local_api_cred_out are all NUL-terminated.
+    ///
+    /// Returns the address and credentials for the proxy and local API.
+    /// (address, proxy_cred, local_api_cred)
+    ///
+    /// ```
+    /// let (proxy_cred, local_api_cred) = ts.loopback("127.0.0.1:1999")?;
+    /// ```
+    pub fn loopback(&self) -> Result<(String, String, String), String> {
+        let mut address_out = [0; 33];
+        let mut proxy_cred_out = [0; 33];
+        let mut local_api_cred_out = [0; 33];
+
+        let result = unsafe {
+            bindings::tailscale_loopback(
+                self.server,
+                address_out.as_mut_ptr(),
+                address_out.len(),
+                proxy_cred_out.as_mut_ptr(),
+                local_api_cred_out.as_mut_ptr(),
+            )
+        };
+        if result != 0 {
+            return Err(tailscale_error_msg(self.server)?);
+        }
+
+        let address_out = unsafe { CStr::from_ptr(address_out.as_ptr() as *const c_char) };
+        let proxy_cred_out = unsafe { CStr::from_ptr(proxy_cred_out.as_ptr() as *const c_char) };
+        let local_api_cred_out =
+            unsafe { CStr::from_ptr(local_api_cred_out.as_ptr() as *const c_char) };
+
+        Ok((
+            address_out.to_string_lossy().into_owned(),
+            proxy_cred_out.to_string_lossy().into_owned(),
+            local_api_cred_out.to_string_lossy().into_owned(),
+        ))
+    }
 }
 
 /// Drop the TSNet instance
