@@ -111,3 +111,5 @@ impl ConfigBuilder {
         })
     }
 }
+
+impl TSNet {}
