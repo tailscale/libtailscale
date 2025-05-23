@@ -249,6 +249,22 @@ impl TSNet {
 
         Ok(listener_out)
     }
+
+    /// tailscale_accept accepts a connection on a tailscale_listener.
+    ///
+    /// It is the spiritual equivalent to accept(2).
+    ///
+    /// The newly allocated connection is written to conn_out.
+    pub fn accept(&self, listener: TailscaleListener) -> Result<TailscaleConnection, String> {
+        let mut conn_out: TailscaleConnBinding = -1;
+        let result = unsafe { bindings::tailscale_accept(listener, &mut conn_out) };
+
+        if result != 0 {
+            return Err(tailscale_error_msg(self.server)?);
+        }
+
+        Ok(conn_out)
+    }
 }
 
 /// Drop the TSNet instance
