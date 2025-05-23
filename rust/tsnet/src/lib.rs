@@ -146,6 +146,18 @@ impl TSNet {
     }
 }
 
+/// Drop the TSNet instance
+impl Drop for TSNet {
+    fn drop(&mut self) {
+        unsafe {
+            let result = bindings::tailscale_close(self.server);
+            if result != 0 {
+                println!("Failed to close Tailscale server: {}", result);
+            }
+        }
+    }
+}
+
 /// This setting lets you set an auth key so that your program will automatically authenticate
 /// with the Tailscale control plane. By default it pulls from the environment variable TS_AUTHKEY,
 /// but you can set your own logic like this:
