@@ -184,6 +184,34 @@ impl TSNet {
             Ok(())
         }
     }
+
+    /// Returns the IP addresses of the the Tailscale server as
+    /// a comma separated list.
+    ///
+    /// The provided buffer must be of sufficient size to hold the concatenated
+    /// IPs as strings.  This is typically <ipv4>,<ipv6> but maybe empty, or
+    /// contain any number of ips.   The caller is responsible for parsing
+    /// the output.  You may assume the output is a list of well-formed IPs.
+    pub fn get_ips(&self, ip_buffer_size: Option<usize>) -> Result<String, String> {
+        let buffer_size = ip_buffer_size.unwrap_or(2048);
+        let mut buffer = vec![0u8; buffer_size];
+
+        let result = unsafe {
+            bindings::tailscale_getips(self.server, buffer.as_mut_ptr() as *mut c_char, buffer_size)
+        };
+
+        if result == EBADF || result == ERANGE {
+            return Err(tailscale_error_msg(self.server)?);
+        }
+
+        let c_str = unsafe { CStr::from_ptr(buffer.as_ptr() as *const c_char) };
+        let ip_string = c_str
+            .to_str()
+            .map_err(|e| format!("Invalid UTF-8 in IP string: {}", e))?
+            .to_string();
+
+        Ok(ip_string)
+    }
 }
 
 /// Drop the TSNet instance
