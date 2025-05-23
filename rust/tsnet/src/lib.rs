@@ -269,6 +269,25 @@ impl TSNet {
 
         Ok(conn_out)
     }
+
+    /// Connects to the address on the tailnet.
+    ///
+    /// network is a string of the form "tcp", "udp", etc.
+    /// addr is a string of an IP address or domain name.
+    ///
+    /// It will start the server if it has not been started yet.
+    pub fn dial(&self, network: &str, addr: &str) -> Result<TailscaleConnection, String> {
+        let network = CString::new(network).map_err(|e| e.to_string())?;
+        let addr = CString::new(addr).map_err(|e| e.to_string())?;
+        let mut conn_out: TailscaleConnBinding = -1;
+        let result = unsafe {
+            bindings::tailscale_dial(self.server, network.as_ptr(), addr.as_ptr(), &mut conn_out)
+        };
+        if result != 0 {
+            return Err(tailscale_error_msg(self.server)?);
+        }
+        Ok(conn_out)
+    }
 }
 
 /// Drop the TSNet instance
