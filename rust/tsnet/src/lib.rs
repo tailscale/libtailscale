@@ -288,6 +288,35 @@ impl TSNet {
         }
         Ok(conn_out)
     }
+
+    /// Returns the remote address (either ip4 or ip6)
+    /// for an incoming connection for a particular listener.
+    /// ```
+    /// let listener = ts.listen("tcp", ":1999")?;
+    /// let (conn, mut stream) = ts.accept(listener).unwrap();
+    /// let remote_addr = ts.get_remote_addr(conn, listener).unwrap();
+    /// ```
+    pub fn get_remote_addr(
+        &self,
+        conn: TailscaleConnection,
+        listener: TailscaleListener,
+    ) -> Result<String, String> {
+        let server = self.server;
+        let mut addr_out: [c_char; INET6_ADDRSTRLEN] = [0; INET6_ADDRSTRLEN];
+        let result = unsafe {
+            bindings::tailscale_getremoteaddr(listener, conn, addr_out.as_mut_ptr(), addr_out.len())
+        };
+        if result != 0 {
+            return Err(tailscale_error_msg(server)?);
+        }
+
+        let c_str = unsafe { CStr::from_ptr(addr_out.as_ptr() as *const c_char) };
+        let addr_string = c_str
+            .to_str()
+            .map_err(|e| format!("Invalid UTF-8 in IP string: {}", e))?
+            .to_string();
+        Ok(addr_string)
+    }
 }
 
 /// Drop the TSNet instance
