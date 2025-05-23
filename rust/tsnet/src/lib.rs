@@ -212,6 +212,43 @@ impl TSNet {
 
         Ok(ip_string)
     }
+
+    /// Listens for a connection on the tailnet.
+    ///
+    /// It is the spiritual equivalent to listen(2).
+    /// Returns the newly allocated listener.
+    ///
+    /// network is a string of the form "tcp", "udp", etc.
+    /// addr is a string of an IP address or domain name.
+    ///
+    /// Calls `start` if the server has not yet been started.
+    ///
+    /// Listen on a specific interface
+    /// ```
+    /// let mut ts = TSNet::new(config)?;
+    /// ts.listen("tcp", "127.0.0.1:8080")?;
+    /// ```
+    /// Listen on all interfaces
+    /// ```
+    /// let mut ts = TSNet::new(config)?;
+    /// ts.listen("tcp", ":8080")?;
+    /// ```
+    pub fn listen(&self, network: &str, addr: &str) -> Result<TailscaleListener, String> {
+        let server = self.server;
+        let network = CString::new(network).map_err(|e| e.to_string())?;
+        let addr = CString::new(addr).map_err(|e| e.to_string())?;
+        let mut listener_out: TailscaleListenerBinding = -1;
+
+        let result = unsafe {
+            bindings::tailscale_listen(server, network.as_ptr(), addr.as_ptr(), &mut listener_out)
+        };
+
+        if result != 0 {
+            return Err(tailscale_error_msg(server)?);
+        }
+
+        Ok(listener_out)
+    }
 }
 
 /// Drop the TSNet instance
