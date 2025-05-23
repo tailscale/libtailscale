@@ -156,6 +156,19 @@ impl TSNet {
             Ok(())
         }
     }
+
+    /// Shuts down the server.
+    /// The server is automatically closed when the TSNet instance is dropped.
+    /// This method is provided for completeness.
+    pub fn close(&mut self) -> Result<(), String> {
+        let result = unsafe { bindings::tailscale_close(self.server) };
+
+        if result != 0 {
+            Err(tailscale_error_msg(self.server)?)
+        } else {
+            Ok(())
+        }
+    }
 }
 
 /// Drop the TSNet instance
