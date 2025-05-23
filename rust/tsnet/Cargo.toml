@@ -2,5 +2,16 @@
 name = "tsnet"
 version = "0.1.0"
 edition = "2024"
+description = "Rust bindings for libtailscale"
+license = "BSD-3-Clause"
+repository = "https://github.com/tailscale/libtailscale"
 
 [dependencies]
+libc = "0.2"
+
+[build-dependencies]
+bindgen = "0.71.1"
+convert_case = "0.6"
+
+[dev-dependencies]
+tempfile = "3.20.0"
