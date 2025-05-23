@@ -1,4 +1,5 @@
 use bindings::{TailscaleBinding, TailscaleConnBinding, TailscaleListenerBinding};
+use std::ffi::{CStr, CString, c_char};
 
 /// Raw bindings for libtailscale
 mod bindings {
@@ -112,4 +113,168 @@ impl ConfigBuilder {
     }
 }
 
-impl TSNet {}
+impl TSNet {
+    /// Creates a new Tailscale server instance
+    ///
+    /// No network connection is initialized until start is called.
+    pub fn new(config: Config) -> Result<Self, String> {
+        let server = unsafe { bindings::tailscale_new() };
+
+        if let Some(authkey) = config.authkey {
+            set_auth_key(server, &authkey)?;
+        }
+
+        if let Some(dir) = config.dir {
+            set_dir(server, &dir)?;
+        }
+
+        if let Some(hostname) = config.hostname {
+            set_hostname(server, &hostname)?;
+        }
+
+        if let Some(control_url) = config.control_url {
+            set_control_url(server, &control_url)?;
+        }
+
+        if config.ephemeral {
+            set_ephemeral(server, config.ephemeral)?;
+        }
+
+        set_log_fd(server, config.logging_fd)?;
+
+        Ok(Self { server })
+    }
+}
+
+/// This setting lets you set an auth key so that your program will automatically authenticate
+/// with the Tailscale control plane. By default it pulls from the environment variable TS_AUTHKEY,
+/// but you can set your own logic like this:
+/// ```
+/// let config = tailscale::ConfigBuilder::new()
+/// .authkey(&key)
+/// .build()?;
+///
+/// let mut ts = TSNet::new(config)?;
+/// ```
+///
+fn set_auth_key(server: TailscaleBinding, key: &str) -> Result<(), String> {
+    let key_cstr = CString::new(key).map_err(|e| e.to_string())?;
+    let result = unsafe { bindings::tailscale_set_authkey(server, key_cstr.as_ptr()) };
+    if result != 0 {
+        return Err(tailscale_error_msg(server)?);
+    }
+    Ok(())
+}
+
+/// This setting lets you control the directory that the tsnet.Server stores data in persistently.
+/// By default,tsnet will store data in your user configuration directory based on the name of the binary.
+/// Note that this folder must already exist or tsnet calls will fail.
+/// Here is how to override this to store data in /data/tsnet:
+/// ```
+/// let config = tailscale::ConfigBuilder::new()
+/// .dir("/data/tsnet")
+/// .build()?;
+///
+/// let mut ts = TSNet::new(config)?;
+/// ```
+///
+fn set_dir(server: TailscaleBinding, dir: &str) -> Result<(), String> {
+    let dir_cstr = CString::new(dir).map_err(|e| e.to_string())?;
+    let result = unsafe { bindings::tailscale_set_dir(server, dir_cstr.as_ptr()) };
+    if result != 0 {
+        return Err(tailscale_error_msg(server)?);
+    }
+    Ok(())
+}
+
+/// This setting lets you control the host name of your program in your tailnet.
+/// By default, this will be the name of your program,
+/// such as foo for a program stored at /usr/local/bin/foo.
+/// You can also override this by setting the Hostname field:
+/// ```
+/// let config = tailscale::ConfigBuilder::new()
+/// .hostname("rust-example")
+/// .build()?;
+///
+/// let mut ts = TSNet::new(config)?;
+/// ```
+///
+fn set_hostname(server: TailscaleBinding, hostname: &str) -> Result<(), String> {
+    let hostname_cstr = CString::new(hostname).map_err(|e| e.to_string())?;
+    let result = unsafe { bindings::tailscale_set_hostname(server, hostname_cstr.as_ptr()) };
+    if result != 0 {
+        return Err(tailscale_error_msg(server)?);
+    }
+    Ok(())
+}
+
+/// This setting lets you control whether the node should be registered as an ephemeral node.
+/// Ephemeral nodes are automatically cleaned up after they disconnect from the control plane.
+/// This is useful when using tsnet in serverless environments or when facts
+/// and circumstances forbid you from using persistent state.
+/// ```
+/// let config = tailscale::ConfigBuilder::new()
+/// .ephemeral(true)
+/// .build()?;
+///
+/// let mut ts = TSNet::new(config)?;
+/// ```
+///
+fn set_ephemeral(server: TailscaleBinding, ephemeral: bool) -> Result<(), String> {
+    let result = unsafe { bindings::tailscale_set_ephemeral(server, ephemeral as i32) };
+    if result != 0 {
+        return Err(tailscale_error_msg(server)?);
+    }
+    Ok(())
+}
+/// This setting specifies the coordination server URL.
+/// If empty, the Tailscale default is used.
+/// ```
+/// let config = tailscale::ConfigBuilder::new()
+/// .control_url("https://controlplane.tailscale.com")
+/// .build()?;
+///
+/// let mut ts = TSNet::new(config)?;
+/// ```
+///
+fn set_control_url(server: TailscaleBinding, control_url: &str) -> Result<(), String> {
+    let control_url_cstr = CString::new(control_url).map_err(|e| e.to_string())?;
+    let result = unsafe { bindings::tailscale_set_control_url(server, control_url_cstr.as_ptr()) };
+    if result != 0 {
+        return Err(tailscale_error_msg(server)?);
+    }
+    Ok(())
+}
+
+/// Instructs the tailscale instance to write logs to fd.
+///
+/// An fd value of -1 means discard all logging.
+/// ```
+/// let config = tailscale::ConfigBuilder::new()
+/// .logging_fd(-1)
+/// .build()?;
+///
+/// let mut ts = TSNet::new(config)?;
+/// ```
+///
+fn set_log_fd(server: TailscaleBinding, fd: i32) -> Result<(), String> {
+    let result = unsafe { bindings::tailscale_set_logfd(server, fd) };
+    if result != 0 {
+        return Err(tailscale_error_msg(server)?);
+    }
+    Ok(())
+}
+
+fn tailscale_error_msg(server: TailscaleBinding) -> Result<String, String> {
+    let mut buffer = vec![0u8; 2048];
+    let result = unsafe {
+        bindings::tailscale_errmsg(server, buffer.as_mut_ptr() as *mut c_char, buffer.len())
+    };
+
+    if result != 0 {
+        return Err(tailscale_error_msg(server)?);
+    }
+
+    let message = unsafe { CStr::from_ptr(buffer.as_ptr() as *const c_char) };
+    Ok(message.to_str().unwrap().to_string())
+}
