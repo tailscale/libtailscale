@@ -1,7 +1,7 @@
 use std::{
     io::{Read, Write},
     net::TcpStream,
-    os::fd::{AsRawFd, FromRawFd},
+    os::fd::{AsFd, AsRawFd, FromRawFd},
 };
 use tsnet::TSNet;
 
@@ -14,9 +14,9 @@ fn main() -> Result<(), String> {
     let listener = ts.listen("tcp", ":1999")?;
 
     loop {
-        let conn = ts.accept(listener).unwrap();
-        let mut stream = unsafe { TcpStream::from_raw_fd(conn.as_raw_fd()) };
-        let remote_addr = ts.get_remote_addr(conn, listener).unwrap();
+        let conn = ts.accept(listener.as_fd()).unwrap();
+        let remote_addr = ts.get_remote_addr(conn.as_fd(), listener.as_fd()).unwrap();
+        let mut stream = TcpStream::from(conn);
         let mut buf = [0; 1024];
 
         println!("connection from: {}", remote_addr);
