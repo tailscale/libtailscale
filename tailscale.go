@@ -405,7 +405,7 @@ func TsnetDial(sd C.int, network, addr *C.char, connOut *C.int) C.int {
 	if err != nil {
 		return s.recErr(err)
 	}
-	if newConn(s, netConn, connOut); err != nil {
+	if err := newConn(s, netConn, connOut); err != nil {
 		return s.recErr(err)
 	}
 	return 0
