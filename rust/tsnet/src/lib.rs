@@ -1,6 +1,6 @@
 use bindings::{TailscaleBinding, TailscaleConnBinding, TailscaleListenerBinding};
 use std::{
-    ffi::{CStr, CString, c_char},
+    ffi::{c_char, CStr, CString},
     os::fd::{AsFd, AsRawFd, BorrowedFd, FromRawFd, OwnedFd},
 };
 
@@ -23,7 +23,7 @@ const INET6_ADDRSTRLEN: usize = 46;
 /// or its equivalent on a tailscale_listener to know if there is a connection
 /// read to accept.
 // Define TailscaleListenerBinding based on platform
-type TailscaleListener = OwnedFd;
+pub type TailscaleListener = OwnedFd;
 
 /// A TailscaleConnection is a connection to an address on the tailnet.
 ///
