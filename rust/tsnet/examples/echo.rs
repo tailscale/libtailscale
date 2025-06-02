@@ -1,7 +1,7 @@
 use std::{
     io::{Read, Write},
     net::TcpStream,
-    os::fd::FromRawFd,
+    os::fd::{AsRawFd, FromRawFd},
 };
 use tsnet::TSNet;
 
@@ -15,7 +15,7 @@ fn main() -> Result<(), String> {
 
     loop {
         let conn = ts.accept(listener).unwrap();
-        let mut stream = unsafe { TcpStream::from_raw_fd(conn) };
+        let mut stream = unsafe { TcpStream::from_raw_fd(conn.as_raw_fd()) };
         let remote_addr = ts.get_remote_addr(conn, listener).unwrap();
         let mut buf = [0; 1024];
 

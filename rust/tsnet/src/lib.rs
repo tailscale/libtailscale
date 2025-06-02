@@ -1,5 +1,8 @@
 use bindings::{TailscaleBinding, TailscaleConnBinding, TailscaleListenerBinding};
-use std::ffi::{CStr, CString, c_char};
+use std::{
+    ffi::{CStr, CString, c_char},
+    os::fd::{AsFd, AsRawFd, FromRawFd, OwnedFd},
+};
 
 /// Raw bindings for libtailscale
 mod bindings {
@@ -25,7 +28,7 @@ type TailscaleListener = i32;
 /// A TailscaleConnection is a connection to an address on the tailnet.
 ///
 /// It is a pipe(2) on which you can use read(2), write(2), and close(2).
-pub type TailscaleConnection = i32;
+pub type TailscaleConnection = OwnedFd;
 
 /// Represents a Tailscale server instance
 pub struct TSNet {
@@ -260,14 +263,14 @@ impl TSNet {
     ///
     /// The newly allocated connection is written to conn_out.
     pub fn accept(&self, listener: TailscaleListener) -> Result<TailscaleConnection, String> {
-        let mut conn_out: TailscaleConnBinding = -1;
+        let mut conn_out: i32 = -1;
         let result = unsafe { bindings::tailscale_accept(listener, &mut conn_out) };
 
         if result != 0 {
             return Err(tailscale_error_msg(self.server)?);
         }
 
-        Ok(conn_out)
+        Ok(unsafe { OwnedFd::from_raw_fd(conn_out) })
     }
 
     /// Connects to the address on the tailnet.
@@ -286,7 +289,7 @@ impl TSNet {
         if result != 0 {
             return Err(tailscale_error_msg(self.server)?);
         }
-        Ok(conn_out)
+        Ok(unsafe { OwnedFd::from_raw_fd(conn_out) })
     }
 
     /// Returns the remote address (either ip4 or ip6)
@@ -303,8 +306,14 @@ impl TSNet {
     ) -> Result<String, String> {
         let server = self.server;
         let mut addr_out: [c_char; INET6_ADDRSTRLEN] = [0; INET6_ADDRSTRLEN];
+        let fd = conn.as_fd();
         let result = unsafe {
-            bindings::tailscale_getremoteaddr(listener, conn, addr_out.as_mut_ptr(), addr_out.len())
+            bindings::tailscale_getremoteaddr(
+                listener,
+                fd.as_raw_fd(),
+                addr_out.as_mut_ptr(),
+                addr_out.len(),
+            )
         };
         if result != 0 {
             return Err(tailscale_error_msg(server)?);
