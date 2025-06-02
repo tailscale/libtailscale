@@ -1,7 +1,7 @@
 use bindings::{TailscaleBinding, TailscaleConnBinding, TailscaleListenerBinding};
 use std::{
     ffi::{CStr, CString, c_char},
-    os::fd::{AsFd, AsRawFd, FromRawFd, OwnedFd},
+    os::fd::{AsFd, AsRawFd, BorrowedFd, FromRawFd, OwnedFd},
 };
 
 /// Raw bindings for libtailscale
@@ -23,7 +23,7 @@ const INET6_ADDRSTRLEN: usize = 46;
 /// or its equivalent on a tailscale_listener to know if there is a connection
 /// read to accept.
 // Define TailscaleListenerBinding based on platform
-type TailscaleListener = i32;
+type TailscaleListener = OwnedFd;
 
 /// A TailscaleConnection is a connection to an address on the tailnet.
 ///
@@ -254,7 +254,7 @@ impl TSNet {
             return Err(tailscale_error_msg(server)?);
         }
 
-        Ok(listener_out)
+        Ok(unsafe { OwnedFd::from_raw_fd(listener_out) })
     }
 
     /// tailscale_accept accepts a connection on a tailscale_listener.
@@ -262,9 +262,9 @@ impl TSNet {
     /// It is the spiritual equivalent to accept(2).
     ///
     /// The newly allocated connection is written to conn_out.
-    pub fn accept(&self, listener: TailscaleListener) -> Result<TailscaleConnection, String> {
+    pub fn accept(&self, listener: BorrowedFd) -> Result<TailscaleConnection, String> {
         let mut conn_out: i32 = -1;
-        let result = unsafe { bindings::tailscale_accept(listener, &mut conn_out) };
+        let result = unsafe { bindings::tailscale_accept(listener.as_raw_fd(), &mut conn_out) };
 
         if result != 0 {
             return Err(tailscale_error_msg(self.server)?);
@@ -301,15 +301,15 @@ impl TSNet {
     /// ```
     pub fn get_remote_addr(
         &self,
-        conn: TailscaleConnection,
-        listener: TailscaleListener,
+        conn: BorrowedFd,
+        listener: BorrowedFd,
     ) -> Result<String, String> {
         let server = self.server;
         let mut addr_out: [c_char; INET6_ADDRSTRLEN] = [0; INET6_ADDRSTRLEN];
         let fd = conn.as_fd();
         let result = unsafe {
             bindings::tailscale_getremoteaddr(
-                listener,
+                listener.as_raw_fd(),
                 fd.as_raw_fd(),
                 addr_out.as_mut_ptr(),
                 addr_out.len(),
