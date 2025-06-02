@@ -22,4 +22,5 @@ libtailscale_*.h
 /sourcepkg/libtailscale
 /sourcepkg/libtailscale.tar*
 
+/rust/tsnet/target
 /vendor/
