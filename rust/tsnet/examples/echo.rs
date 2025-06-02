@@ -1,7 +1,7 @@
 use std::{
     io::{Read, Write},
     net::TcpStream,
-    os::fd::{AsFd, AsRawFd, FromRawFd},
+    os::fd::AsFd,
 };
 use tsnet::TSNet;
 
@@ -29,6 +29,7 @@ fn main() -> Result<(), String> {
             stream.flush().unwrap();
         }
 
+        drop(stream);
         return Ok(());
     }
 }
