@@ -71,7 +71,7 @@ using `libtailscale` and the `gen_tailscale` wrapper.
 
 Everything in this chain of packages should be considered proof of concept at
 this point and should not be used for anything important. Especially the
-`gen_tailscale` library has been constructed by crudely hacing the original
+`gen_tailscale` library has been constructed by crudely hacking the original
 `gen_tcp` module to use `libtailscale` and could use a total rewrite at some
 point. However, it works well enough that my example application
 [`tschat`](https://github.com/Munksgaard/tschat) is able to accept connections
