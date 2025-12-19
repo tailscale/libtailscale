@@ -128,7 +128,7 @@ public struct Ipn: Sendable {
         private(set) var ForceDaemonSet: Bool?
         private(set) var HostnameSet: Bool?
 
-        init() {}
+        public init() {}
 
         // Helper builder functions which can be chained in place of the convenience
         // initializer.
