@@ -169,7 +169,7 @@ func TsnetGetIps(sd C.int, buf *C.char, buflen C.size_t) C.int {
 	ip4, ip6 := s.s.TailscaleIPs()
 	joined := strings.Join([]string{ip4.String(), ip6.String()}, ",")
 	n := copy(out, joined)
-	if len(out) < len(joined)-1 {
+	if len(out) <= len(joined) {
 		out[len(out)-1] = '\x00' // always NUL-terminate
 		return C.ERANGE
 	}
@@ -195,7 +195,7 @@ func TsnetErrmsg(sd C.int, buf *C.char, buflen C.size_t) C.int {
 		return C.EBADF
 	}
 	n := copy(out, s.lastErr)
-	if len(out) < len(s.lastErr)-1 {
+	if len(out) <= len(s.lastErr) {
 		out[len(out)-1] = '\x00' // always NUL-terminate
 		return C.ERANGE
 	}
@@ -380,7 +380,7 @@ func TsnetGetRemoteAddr(listener C.int, conn C.int, buf *C.char, buflen C.size_t
 	ip := extractIP(addr.String())
 
 	n := copy(out, ip)
-	if len(out) < len(ip)-1 {
+	if len(out) <= len(ip) {
 		out[len(out)-1] = '\x00' // always NUL-terminate
 		return C.ERANGE
 	}
