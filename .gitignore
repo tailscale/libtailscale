@@ -23,3 +23,8 @@ libtailscale_*.h
 /sourcepkg/libtailscale.tar*
 
 /vendor/
+
+
+# Added by cargo
+
+/target
