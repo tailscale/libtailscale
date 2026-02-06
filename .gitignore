@@ -4,6 +4,7 @@ libtailscale.h
 libtailscale.tar*
 libtailscale_*.a
 libtailscale_*.h
+libtailscale.bundle
 
 /tstestcontrol/libtstestcontrol.a
 /tstestcontrol/libtstestcontrol.h
