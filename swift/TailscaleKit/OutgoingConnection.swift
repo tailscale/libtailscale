@@ -78,7 +78,7 @@ public actor OutgoingConnection {
 
     deinit {
         if conn != 0 {
-            unistd.close(conn)
+            Darwin.close(conn)
         }
     }
 
@@ -87,7 +87,7 @@ public actor OutgoingConnection {
     /// state to .closed
     public func close() {
         if conn != 0 {
-            unistd.close(conn)
+            Darwin.close(conn)
             conn = 0
         }
         state = .closed
@@ -101,7 +101,7 @@ public actor OutgoingConnection {
             throw TailscaleError.connectionClosed
         }
 
-        let bytesWritten = unistd.write(conn, data.withUnsafeBytes { $0.baseAddress! }, data.count)
+        let bytesWritten = Darwin.write(conn, data.withUnsafeBytes { $0.baseAddress! }, data.count)
 
         if bytesWritten != data.count {
             throw TailscaleError.shortWrite

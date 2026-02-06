@@ -33,13 +33,13 @@ public actor IncomingConnection {
 
     deinit {
         if conn != 0 {
-            unistd.close(conn)
+            Darwin.close(conn)
         }
     }
 
     public func close() {
         if conn != 0 {
-            unistd.close(conn)
+            Darwin.close(conn)
             conn = 0
         }
         _state = .closed
@@ -87,7 +87,7 @@ private actor SocketReader {
         let bytesToRead = min(len, Self.maxBufferSize)
         var bytesRead = 0
         buffer.withUnsafeMutableBufferPointer { ptr in
-            bytesRead = unistd.read(conn, ptr.baseAddress, bytesToRead)
+            bytesRead = Darwin.read(conn, ptr.baseAddress, bytesToRead)
         }
 
         if bytesRead < 0 {

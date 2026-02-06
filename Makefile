@@ -1,18 +1,41 @@
 # Copyright (c) Tailscale Inc & AUTHORS
 # SPDX-License-Identifier: BSD-3-Clause
 
+# Detect GOOS if not set
+ifeq ($(GOOS),)
+	GOOS := $(shell go env GOOS)
+endif
 
-libtailscale.a: 
-	go build -buildmode=c-archive 
+export CGO_ENABLED=1
+
+# This should match the minimum target in the xCode project
+# The wrapper lib currently requires features available in
+# MacOS 15.0 (Sequoia)
+MACOS_TARGET := 15.0
+
+# Set macOS-specific flags for darwin builds
+ifeq ($(GOOS),darwin)
+	DARWIN_CGO_CFLAGS := -mmacos-version-min=$(MACOS_TARGET)
+	DARWIN_CGO_LDFLAGS := -mmacos-version-min=$(MACOS_TARGET)
+	DARWIN_DEPLOYMENT_TARGET := MACOSX_DEPLOYMENT_TARGET=$(MACOS_TARGET)
+endif
+
+libtailscale.so:
+	$(DARWIN_DEPLOYMENT_TARGET) CGO_CFLAGS="$(CGO_CFLAGS) $(DARWIN_CGO_CFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS) $(DARWIN_CGO_LDFLAGS)" go build -v -buildmode=c-shared -o $@
+
+libtailscale.a:
+	$(DARWIN_DEPLOYMENT_TARGET) CGO_CFLAGS="$(CGO_CFLAGS) $(DARWIN_CGO_CFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS) $(DARWIN_CGO_LDFLAGS)" go build -buildmode=c-archive -o $@
 
 libtailscale_ios.a:
-	GOOS=ios GOARCH=arm64 CGO_ENABLED=1 CC=$(PWD)/swift/script/clangwrap-ios.sh go build -v -ldflags -w -tags ios -o libtailscale_ios.a -buildmode=c-archive
+	# TODO(raggi): setup a PREFIX in the libtailscale.a build, then delete these targets, the caller should be setting PREFIX and CC
+	# that way the caller can also use the prefix, and not have to specialize target/link object names per build configuration.
+	GOOS=ios GOARCH=arm64 CC=$(PWD)/swift/script/clangwrap-ios.sh go build -v -ldflags -w -tags ios -o $@ -buildmode=c-archive
 
 libtailscale_ios_sim_arm64.a:
-	GOOS=ios GOARCH=arm64 CGO_ENABLED=1 CC=$(PWD)/swift/script/clangwrap-ios-sim-arm.sh go build -v -ldflags -w -tags ios -o libtailscale_ios_sim_arm64.a -buildmode=c-archive
+	GOOS=ios GOARCH=arm64 CC=$(PWD)/swift/script/clangwrap-ios-sim-arm.sh go build -v -ldflags -w -tags ios -o $@ -buildmode=c-archive
 
 libtailscale_ios_sim_x86_64.a:
-	GOOS=ios GOARCH=amd64 CGO_ENABLED=1 CC=$(PWD)/swift/script/clangwrap-ios-sim-x86.sh go build -v -ldflags -w -tags ios -o libtailscale_ios_sim_x86_64.a -buildmode=c-archive
+	GOOS=ios GOARCH=amd64 CC=$(PWD)/swift/script/clangwrap-ios-sim-x86.sh go build -v -ldflags -w -tags ios -o $@ -buildmode=c-archive
 
 .PHONY: c-archive-ios
 c-archive-ios: libtailscale_ios.a  ## Builds libtailscale_ios.a for iOS (iOS SDK required)
@@ -21,17 +44,18 @@ c-archive-ios: libtailscale_ios.a  ## Builds libtailscale_ios.a for iOS (iOS SDK
 c-archive-ios-sim: libtailscale_ios_sim_arm64.a libtailscale_ios_sim_x86_64.a ## Builds a fat binary for iOS (iOS SDK required)
 	lipo -create -output libtailscale_ios_sim.a libtailscale_ios_sim_x86_64.a libtailscale_ios_sim_arm64.a
 
-.PHONY: c-archive 
+.PHONY: c-archive
 c-archive: libtailscale.a  ## Builds libtailscale.a for the target platform
 
 .PHONY: shared
-shared: ## Builds libtailscale.so for the target platform
-	go build -v -buildmode=c-shared
+shared: libtailscale.so ## Builds libtailscale.so for the target platform
 
 .PHONY: clean
 clean: ## Clean up build artifacts
 	rm -f libtailscale*.h
 	rm -f libtailscale*.a
+	rm -f libtailscale*.so
+
 
 .PHONY: help
 help: ## Show this help

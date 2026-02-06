@@ -52,7 +52,7 @@ public actor Listener {
 
     deinit {
         if listener != 0 {
-            unistd.close(listener)
+            Darwin.close(listener)
         }
     }
 
@@ -60,7 +60,7 @@ public actor Listener {
     /// Listeners will be closed automatically on deallocation
     public func close() {
         if listener != 0 {
-            unistd.close(listener)
+            Darwin.close(listener)
             listener = 0
         }
         _state = .closed
