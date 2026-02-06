@@ -34,4 +34,5 @@ Gem::Specification.new do |spec|
   spec.extensions = ["ext/libtailscale/extconf.rb"]
 
   spec.add_dependency "ffi", "~> 1.15.5"
+  spec.add_dependency "base64", "~> 0.3"
 end

@@ -1,10 +1,12 @@
 # Copyright (c) Tailscale Inc & AUTHORS
 # SPDX-License-Identifier: BSD-3-Clause
 
-all:
-	go build -buildmode=c-archive -o libtstestcontrol.a   	
+.PHONY: all clean
+
+all: libtstestcontrol.a
+
+libtstestcontrol.a:
+	go build -buildmode=c-archive -o $@
 
 clean:
-	rm libtstestcontrol.a
-	rm libtstestcontrol.h
-
+	rm -f libtstestcontrol.a
