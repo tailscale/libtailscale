@@ -14,20 +14,22 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"log"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"sync"
+	"testing"
 	"unsafe"
 
 	"tailscale.com/net/netaddr"
 	"tailscale.com/net/netns"
 	"tailscale.com/net/stun"
+	"tailscale.com/tstest/integration"
 	"tailscale.com/tstest/integration/testcontrol"
 	"tailscale.com/types/logger"
 
-	"tailscale.com/derp"
-	"tailscale.com/derp/derphttp"
+	"tailscale.com/derp/derpserver"
 	"tailscale.com/tailcfg"
 	"tailscale.com/types/key"
 	"tailscale.com/types/nettype"
@@ -38,9 +40,9 @@ func main() {}
 //export StopControl
 func StopControl() {
 	netns.SetEnabled(true)
-    if control != nil  {
-        control.HTTPTestServer.Close()
-    }
+	if control != nil {
+		control.HTTPTestServer.Close()
+	}
 	cleanup()
 	control = nil
 }
@@ -67,12 +69,10 @@ func RunControl(buf *C.char, buflen C.size_t) C.int {
 	// Corp#4520: don't use netns for tests.
 	netns.SetEnabled(false)
 
+	var t fakeTB
+
 	derpLogf := logger.Discard
-	derpMap, c, err := runDERPAndSTUN(derpLogf, "127.0.0.1")
-	if err != nil {
-		out[0] = '\x00'
-		return -1
-	}
+	derpMap := integration.RunDERPAndSTUN(&t, derpLogf, "127.0.0.1")
 
 	control := &testcontrol.Server{
 		DERPMap: derpMap,
@@ -80,7 +80,7 @@ func RunControl(buf *C.char, buflen C.size_t) C.int {
 	control.HTTPTestServer = httptest.NewUnstartedServer(control)
 	control.HTTPTestServer.Start()
 	controlURL := control.HTTPTestServer.URL
-	cleanup = c
+	cleanup = t.shutdown
 
 	n := copy(out, controlURL)
 	out[n] = '\x00'
@@ -92,14 +92,14 @@ func RunControl(buf *C.char, buflen C.size_t) C.int {
 // that clients should use. This creates resources that must be cleaned up with the
 // returned cleanup function.
 func runDERPAndSTUN(logf logger.Logf, ipAddress string) (derpMap *tailcfg.DERPMap, cleanup func(), err error) {
-	d := derp.NewServer(key.NewNode(), logf)
+	d := derpserver.New(key.NewNode(), logf)
 
 	ln, err := net.Listen("tcp", net.JoinHostPort(ipAddress, "0"))
 	if err != nil {
 		return nil, nil, err
 	}
 
-	httpsrv := httptest.NewUnstartedServer(derphttp.Handler(d))
+	httpsrv := httptest.NewUnstartedServer(derpserver.Handler(d))
 	httpsrv.Listener.Close()
 	httpsrv.Listener = ln
 	httpsrv.Config.ErrorLog = logger.StdLogger(logf)
@@ -208,5 +208,69 @@ func runSTUN(pc nettype.PacketConn, stats *stunStats, done chan<- struct{}) {
 		if _, err := pc.WriteToUDPAddrPort(res, src); err != nil {
 			// TODO(barnstar): inject logging from C
 		}
+	}
+}
+
+type fakeTB struct {
+	*testing.T
+	cleanups []func()
+}
+
+func (t *fakeTB) Cleanup(f func()) {
+	t.cleanups = append(t.cleanups, f)
+}
+func (t fakeTB) Error(args ...any) {
+	t.Fatal(args...)
+}
+func (t fakeTB) Errorf(format string, args ...any) {
+	t.Fatalf(format, args...)
+}
+func (t fakeTB) Fail() {
+	t.Fatal("failed")
+}
+func (t fakeTB) FailNow() {
+	t.Fatal("failed")
+}
+func (t fakeTB) Failed() bool {
+	return false
+}
+func (t fakeTB) Fatal(args ...any) {
+	log.Fatal(args...)
+}
+func (t fakeTB) Fatalf(format string, args ...any) {
+	log.Fatalf(format, args...)
+}
+func (t fakeTB) Helper() {}
+func (t fakeTB) Log(args ...any) {
+	log.Print(args...)
+}
+func (t fakeTB) Logf(format string, args ...any) {
+	log.Printf(format, args...)
+}
+func (t fakeTB) Name() string {
+	return "faketest"
+}
+func (t fakeTB) Setenv(key string, value string) {
+	panic("not implemented")
+}
+func (t fakeTB) Skip(args ...any) {
+	t.Fatal("skipped")
+}
+func (t fakeTB) SkipNow() {
+	t.Fatal("skipnow")
+}
+func (t fakeTB) Skipf(format string, args ...any) {
+	t.Logf(format, args...)
+	t.Fatal("skipped")
+}
+func (t fakeTB) Skipped() bool {
+	return false
+}
+func (t fakeTB) TempDir() string {
+	panic("not implemented")
+}
+func (t *fakeTB) shutdown() {
+	for _, cleanup := range t.cleanups {
+		cleanup()
 	}
 }
