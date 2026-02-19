@@ -237,6 +237,7 @@ public struct IpnState: Sendable {
         public var Addrs: [String]?
         public var CurAddr: String?
         public var Relay: String?
+        public var PeerRelay: String?
         public var Online: Bool
         public var ExitNode: Bool
         public var ExitNodeOption: Bool
@@ -296,7 +297,7 @@ public struct IpnState: Sendable {
         public var MagicDNSEnabled: Bool
     }
 
-     struct PingResult: Codable, Sendable {
+    struct PingResult: Codable, Sendable {
         public var IP: IP.Addr
         public var Err: String
         public var LatencySeconds: TimeInterval
@@ -308,7 +309,6 @@ public struct Netmap: Sendable {
         public var SelfNode: Tailcfg.Node
         public var NodeKey: Key.NodePublic
         public var Peers: [Tailcfg.Node]?
-        public var Expiry: Time.Time
         public var Domain: String
         public var UserProfiles: [String: Tailcfg.UserProfile] // Keys are tailcfg.UserIDs thet get stringified
         public var DNS: Tailcfg.DNSConfig?
@@ -321,18 +321,10 @@ public struct Netmap: Sendable {
             return UserProfiles[String(id)]
         }
 
-        public func isExpired() -> Bool {
-            if let expiryDate = Expiry.iso8601Date() {
-                return (expiryDate as NSDate).earlierDate(Date()) == expiryDate
-            }
-            return false
-        }
-
         public static func == (lhs: Netmap.NetworkMap, rhs: Netmap.NetworkMap) -> Bool {
             lhs.SelfNode == rhs.SelfNode &&
             lhs.NodeKey == rhs.NodeKey &&
             lhs.Peers == rhs.Peers &&
-            lhs.Expiry == rhs.Expiry &&
             lhs.Domain == rhs.Domain &&
             lhs.UserProfiles == rhs.UserProfiles &&
             lhs.DNS == rhs.DNS
@@ -362,8 +354,7 @@ public struct Tailcfg: Sendable {
         public var User: Tailcfg.UserID
         public var Sharer: Tailcfg.UserID?
         public var Key: Key.NodePublic
-        public var KeyExpiry: Time.Time
-        public var Machine: Tailcfg.MachineKey
+        public var KeyExpiry: Time.Time?
         public var Addresses: [IP.Prefix]?
         public var AllowedIPs: [IP.Prefix]?
         public var Hostinfo: Hostinfo
@@ -408,7 +399,7 @@ public struct Tailcfg: Sendable {
                 return false
             }
 
-            if let expiryDate = KeyExpiry.iso8601Date() {
+            if let expiryDate = KeyExpiry?.iso8601Date() {
                 return (expiryDate as NSDate).earlierDate(Date()) == expiryDate && !KeyDoesNotExpire
             }
 
@@ -452,6 +443,7 @@ public struct Tailcfg: Sendable {
     public struct NetworkProfile: Codable, Equatable, Sendable {
         public var MagicDNSName: String?
         public var DomainName: String?
+        public var DisplayName: String?
     }
 
     public struct DNSRecord: Codable, Sendable, Equatable {
@@ -504,3 +496,4 @@ struct GoError: Codable, Sendable, LocalizedError {
         return Error
     }
 }
+

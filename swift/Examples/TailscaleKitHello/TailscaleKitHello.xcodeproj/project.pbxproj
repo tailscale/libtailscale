@@ -378,7 +378,7 @@
 				DEVELOPMENT_TEAM = W5364U7YZB;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
-				FRAMEWORK_SEARCH_PATHS = ../../build/Build;
+				FRAMEWORK_SEARCH_PATHS = "../../build/Build/**";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = HelloFromTailscale/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -407,7 +407,7 @@
 				DEVELOPMENT_TEAM = W5364U7YZB;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
-				FRAMEWORK_SEARCH_PATHS = ../../build/Build;
+				FRAMEWORK_SEARCH_PATHS = "../../build/Build/**";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = HelloFromTailscale/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
