@@ -91,7 +91,7 @@ public class MessageProcessor: @unchecked Sendable {
                         await consumer.notify(notify)
                     }
                 } catch {
-                    logger?.log("Failed to decode message: \(String(data: line, encoding: .utf8) ?? "nil")")
+                    logger?.log("Failed to decode message: \(error.localizedDescription)")
                 }
             }
         }

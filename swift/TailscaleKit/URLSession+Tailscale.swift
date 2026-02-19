@@ -5,9 +5,11 @@
 import UIKit
 #endif
 
+import Network
+
 public extension URLSessionConfiguration {
 
-    /// Adds the a connectionProxyDictionary to a URLSessionConfiguration to
+    /// Adds the a ProxyConfiguration to a URLSessionConfiguration to
     /// proxy all requests through the given TailscaleNode.
     ///
     /// This can also be use to make requests to LocalAPI.  See LocalAPIClient
@@ -19,17 +21,15 @@ public extension URLSessionConfiguration {
             throw TailscaleError.invalidProxyAddress
         }
 
+        let endpoint = NWEndpoint.hostPort(host: NWEndpoint.Host(ip),
+                                           port: NWEndpoint.Port(rawValue: UInt16(port))!)
 
-        let config: [CFString: Any] = [
-            kCFProxyTypeKey: kCFProxyTypeSOCKS,
-            kCFProxyUsernameKey: "tsnet",
-            kCFProxyPasswordKey: proxyConfig.proxyCredential,
-            kCFProxyHostNameKey: ip,
-            kCFProxyPortNumberKey: port
-        ]
+        let sessionProxyConfig = ProxyConfiguration(socksv5Proxy: endpoint)
+        sessionProxyConfig.applyCredential(username: "tsnet", password:
+                                            proxyConfig.proxyCredential)
 
-        self.connectionProxyDictionary = config
-        
+        self.proxyConfigurations = [sessionProxyConfig]
+
         return proxyConfig
     }
 
