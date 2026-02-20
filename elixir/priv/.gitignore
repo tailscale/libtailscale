@@ -1,0 +1,2 @@
+# Don't commit copied files from parent directory
+/libtailscale
