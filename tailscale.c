@@ -22,6 +22,7 @@ extern int TsnetSetLogFD(int sd, int fd);
 extern int TsnetGetIps(int sd, char *buf, size_t buflen);
 extern int TsnetGetRemoteAddr(int listener, int conn, char *buf, size_t buflen);
 extern int TsnetListen(int sd, char* net, char* addr, int* listenerOut);
+extern int TsnetAccept(int ld, int* connOut);
 extern int TsnetLoopback(int sd, char* addrOut, size_t addrLen, char* proxyOut, char* localOut);
 extern int TsnetEnableFunnelToLocalhostPlaintextHttp1(int sd, int localhostPort);
 
@@ -50,27 +51,7 @@ int tailscale_listen(tailscale sd, const char* network, const char* addr, tailsc
 }
 
 int tailscale_accept(tailscale_listener ld, tailscale_conn* conn_out) {
-	struct msghdr msg = {0};
-
-	char mbuf[256];
-	struct iovec io = { .iov_base = mbuf, .iov_len = sizeof(mbuf) };
-	msg.msg_iov = &io;
-	msg.msg_iovlen = 1;
-
-	char cbuf[256];
-	msg.msg_control = cbuf;
-	msg.msg_controllen = sizeof(cbuf);
-
-	if (recvmsg(ld, &msg, 0) == -1) {
-		return -1;
-	}
-
-	struct cmsghdr* cmsg = CMSG_FIRSTHDR(&msg);
-	unsigned char* data = CMSG_DATA(cmsg);
-
-	int fd = *(int*)data;
-	*conn_out = fd;
-	return 0;
+	return TsnetAccept(ld, (int*)conn_out);
 }
 
 int tailscale_getremoteaddr(tailscale_listener l, tailscale_conn conn, char* buf, size_t buflen) {

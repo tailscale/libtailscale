@@ -20,6 +20,7 @@ import (
 	"syscall"
 	"unsafe"
 
+	"golang.org/x/sys/unix"
 	"tailscale.com/hostinfo"
 	"tailscale.com/ipn"
 	"tailscale.com/tsnet"
@@ -38,6 +39,7 @@ var servers struct {
 type server struct {
 	s       *tsnet.Server
 	lastErr string
+	started bool
 }
 
 func getServer(sd C.int) *server {
@@ -106,7 +108,11 @@ func TsnetStart(sd C.int) C.int {
 	if s == nil {
 		return C.EBADF
 	}
-	return s.recErr(s.s.Start())
+	err := s.s.Start()
+	if err == nil {
+		s.started = true
+	}
+	return s.recErr(err)
 }
 
 //export TsnetUp
@@ -116,6 +122,9 @@ func TsnetUp(sd C.int) C.int {
 		return C.EBADF
 	}
 	_, err := s.s.Up(context.Background()) // cancellation is via TsnetClose
+	if err == nil {
+		s.started = true
+	}
 	return s.recErr(err)
 }
 
@@ -134,6 +143,10 @@ func TsnetClose(sd C.int) C.int {
 
 	// TODO: cancel Up
 	// TODO: close related listeners / conns.
+	if !s.started {
+		// Server was never started, nothing to close.
+		return 0
+	}
 	if err := s.s.Close(); err != nil {
 		s.s.Logf("tailscale_close: failed with %v", err)
 		return -1
@@ -209,6 +222,7 @@ func TsnetListen(sd C.int, network, addr *C.char, listenerOut *C.int) C.int {
 	if err != nil {
 		return s.recErr(err)
 	}
+	s.started = true
 
 	// The tailscale_listener we return to C is one side of a socketpair(2).
 	// We do this so we can proactively call ln.Accept in a goroutine and
@@ -289,6 +303,41 @@ func TsnetListen(sd C.int, network, addr *C.char, listenerOut *C.int) C.int {
 	}()
 
 	*listenerOut = fdC
+	return 0
+}
+
+//export TsnetAccept
+func TsnetAccept(listenerFd C.int, connOut *C.int) C.int {
+	listeners.mu.Lock()
+	ln := listeners.m[listenerFd]
+	listeners.mu.Unlock()
+
+	if ln == nil {
+		return C.EBADF
+	}
+
+	buf := make([]byte, unix.CmsgLen(int(unsafe.Sizeof((C.int)(0)))))
+	_, oobn, _, _, err := syscall.Recvmsg(int(listenerFd), nil, buf, 0)
+	if err != nil {
+		return ln.s.recErr(err)
+	}
+
+	scms, err := syscall.ParseSocketControlMessage(buf[:oobn])
+	if err != nil {
+		return ln.s.recErr(err)
+	}
+	if len(scms) != 1 {
+		return ln.s.recErr(fmt.Errorf("libtailscale: got %d control messages, want 1", len(scms)))
+	}
+	fds, err := syscall.ParseUnixRights(&scms[0])
+	if err != nil {
+		return ln.s.recErr(err)
+	}
+	if len(fds) != 1 {
+		return ln.s.recErr(fmt.Errorf("libtailscale: got %d FDs, want 1", len(fds)))
+	}
+	*connOut = (C.int)(fds[0])
+
 	return 0
 }
 
@@ -400,6 +449,7 @@ func TsnetDial(sd C.int, network, addr *C.char, connOut *C.int) C.int {
 	if err != nil {
 		return s.recErr(err)
 	}
+	s.started = true
 	if err := newConn(s, netConn, connOut); err != nil {
 		return s.recErr(err)
 	}

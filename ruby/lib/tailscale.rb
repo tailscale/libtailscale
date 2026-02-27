@@ -39,8 +39,9 @@ class Tailscale
     attach_function :TsnetSetLogFD, [:int, :int], :int
     attach_function :TsnetDial, [:int, :string, :string, :pointer], :int, blocking: true
     attach_function :TsnetListen, [:int, :string, :string, :pointer], :int
-    attach_function :close, [:int], :int
-    attach_function :tailscale_accept, [:int, :pointer], :int, blocking: true
+    attach_function :TsnetAccept, [:int, :pointer], :int, blocking: true
+    attach_function :TsnetGetIps, [:int, :pointer, :size_t], :int
+    attach_function :TsnetGetRemoteAddr, [:int, :int, :pointer, :size_t], :int
     attach_function :TsnetErrmsg, [:int, :pointer, :size_t], :int
     attach_function :TsnetLoopback, [:int, :pointer, :size_t, :pointer, :pointer], :int
   end
@@ -81,20 +82,33 @@ class Tailscale
       @listener = listener
     end
 
+    # Get the remote address of an accepted connection. +conn+ is the +IO+
+    # object returned by +accept+. Returns the remote IP address as a string.
+    def get_remote_addr(conn)
+      @ts.assert_open
+      buf = FFI::MemoryPointer.new(:char, 1024)
+      Error.check(@ts, Libtailscale::TsnetGetRemoteAddr(@listener, conn.fileno, buf, buf.size))
+      buf.read_string
+    end
+
     # Accept a new connection. This method blocks until a new connection is
     # received. An +IO+ object is returned which can be used to read and
     # write.
     def accept
       @ts.assert_open
+      lio = IO.for_fd(@listener)
+      until IO.select([lio]).first.any?
+        @ts.assert_open
+      end
       conn = FFI::MemoryPointer.new(:int)
-      Error.check(@ts, Libtailscale::tailscale_accept(@listener, conn))
+      Error.check(@ts, Libtailscale::TsnetAccept(@listener, conn))
       IO::new(conn.read_int)
     end
 
     # Close the listener.
     def close
       @ts.assert_open
-      Error.check(@ts, Libtailscale::close(@listener))
+      IO.for_fd(@listener).close
     end
   end
 
@@ -228,9 +242,17 @@ class Tailscale
     Error.check(self, Libtailscale::TsnetSetLogFD(@t, log_fd))
   end
 
+  # Get the IP addresses of this Tailscale node as an array of strings.
+  # The node must be started before calling this method.
+  def get_ips
+    assert_open
+    buf = FFI::MemoryPointer.new(:char, 1024)
+    Error.check(self, Libtailscale::TsnetGetIps(@t, buf, buf.size))
+    buf.read_string.split(",")
+  end
+
   # Dial a network address. +network+ is one of "tcp" or "udp". +addr+ is the
-  # remote address to connect to. This method blocks until the connection is
-  # established.
+  # remote address to connect to. This method blocks until the connection is established.
   def dial(network, addr)
     assert_open
     conn = FFI::MemoryPointer.new(:int)
