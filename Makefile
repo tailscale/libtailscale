@@ -50,6 +50,29 @@ c-archive: libtailscale.a  ## Builds libtailscale.a for the target platform
 .PHONY: shared
 shared: libtailscale.so ## Builds libtailscale.so for the target platform
 
+.PHONY: test
+test: test-go test-ruby test-swift ## Runs all tests available on the host platform
+
+.PHONY: test-go
+test-go: ## Runs Go and C integration tests
+	go test -v ./...
+
+.PHONY: test-ruby
+test-ruby: ## Runs Ruby binding tests (requires ruby, bundler)
+	@if command -v bundle >/dev/null 2>&1 && [ -f ruby/Gemfile ]; then \
+		cd ruby && bundle exec rake test; \
+	else \
+		echo "skipping ruby tests: bundle not found"; \
+	fi
+
+.PHONY: test-swift
+test-swift: ## Runs Swift binding tests (requires macOS, xcodebuild)
+	@if [ "$(GOOS)" = "darwin" ] && command -v xcodebuild >/dev/null 2>&1; then \
+		cd swift && $(MAKE) test; \
+	else \
+		echo "skipping swift tests: requires macOS with xcodebuild"; \
+	fi
+
 .PHONY: clean
 clean: ## Clean up build artifacts
 	rm -f libtailscale*.h

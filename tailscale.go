@@ -59,8 +59,13 @@ type listener struct {
 	ln net.Listener
 	fd int // go side fd of socketpair sent to C
 	mu sync.Mutex
-	m  map[C.int]net.Addr //maps fds to remote addresses for lookup
+	m  map[C.int]net.Addr
 }
+
+type strAddr string
+
+func (s strAddr) Network() string { return "" }
+func (s strAddr) String() string  { return string(s) }
 
 // conns tracks all the pipe(2)s allocated via tsnet_dial.
 var conns struct {
@@ -282,23 +287,17 @@ func TsnetListen(sd C.int, network, addr *C.char, listenerOut *C.int) C.int {
 				netConn.Close()
 				continue
 			}
+			addrBytes := []byte(netConn.RemoteAddr().String())
 			rights := syscall.UnixRights(int(connFd))
-			err = syscall.Sendmsg(sp, nil, rights, nil, 0)
+			err = syscall.Sendmsg(sp, addrBytes, rights, nil, 0)
 			if err != nil {
-				// We handle sp being closed in the read goroutine above.
 				if s.s.Logf != nil {
 					s.s.Logf("libtailscale.accept: sendmsg failed: %v", err)
 				}
 				netConn.Close()
 				// fallthrough to close connFd, then continue Accept()ing
 			}
-
-			// map the connection to the remote address
-			listener.mu.Lock()
-			listener.m[connFd] = netConn.RemoteAddr()
-			listener.mu.Unlock()
-
-			syscall.Close(int(connFd)) // now owned by recvmsg
+			syscall.Close(int(connFd)) // sender's copy; receiver gets its own fd from recvmsg
 		}
 	}()
 
@@ -316,13 +315,14 @@ func TsnetAccept(listenerFd C.int, connOut *C.int) C.int {
 		return C.EBADF
 	}
 
-	buf := make([]byte, unix.CmsgLen(int(unsafe.Sizeof((C.int)(0)))))
-	_, oobn, _, _, err := syscall.Recvmsg(int(listenerFd), nil, buf, 0)
+	addrBuf := make([]byte, 256)
+	oobBuf := make([]byte, unix.CmsgLen(int(unsafe.Sizeof((C.int)(0)))))
+	n, oobn, _, _, err := syscall.Recvmsg(int(listenerFd), addrBuf, oobBuf, 0)
 	if err != nil {
 		return ln.s.recErr(err)
 	}
 
-	scms, err := syscall.ParseSocketControlMessage(buf[:oobn])
+	scms, err := syscall.ParseSocketControlMessage(oobBuf[:oobn])
 	if err != nil {
 		return ln.s.recErr(err)
 	}
@@ -336,7 +336,14 @@ func TsnetAccept(listenerFd C.int, connOut *C.int) C.int {
 	if len(fds) != 1 {
 		return ln.s.recErr(fmt.Errorf("libtailscale: got %d FDs, want 1", len(fds)))
 	}
-	*connOut = (C.int)(fds[0])
+	fd := (C.int)(fds[0])
+	*connOut = fd
+
+	if n > 0 {
+		ln.mu.Lock()
+		ln.m[fd] = strAddr(string(addrBuf[:n]))
+		ln.mu.Unlock()
+	}
 
 	return 0
 }
