@@ -1,41 +1,46 @@
 # Copyright (c) Tailscale Inc & AUTHORS
 # SPDX-License-Identifier: BSD-3-Clause
-# TODO(shayne): proper select/poll/epoll + os.set_blocking(conn, False)
+
 import os
-import select
+import signal
+import sys
 from tailscale import TSNet
 
 def handler(conn):
-    while True:
-        r, _, _ = select.select([conn], [], [], 10)
-        if not conn in r:
-            os._exit(0)
-        data = os.read(conn, 2048)
-        print(data.decode(), end="")
+    """Handle a single connection - echo all received data."""
+    try:
+        while True:
+            data = conn.read(2048)
+            if not data:  # Connection closed
+                break
+            try:
+                print(data.decode('utf-8'), end="")
+            except UnicodeDecodeError:
+                print(data.decode('utf-8', errors='replace'), end="")
+    finally:
+        conn.close()
 
 
 def main():
-    procs = []
+    def shutdown(signum, frame):
+        print("\nShutting down...")
+        sys.exit(0)
 
-    ts = TSNet(ephemeral=True)
-    ts.up()
+    signal.signal(signal.SIGINT, shutdown)
+    signal.signal(signal.SIGTERM, shutdown)
 
-    ln = ts.listen("tcp", ":1999")
-    while True:
-        while procs:
-            pid, exit_code = os.waitpid(-1, os.WNOHANG)
-            if pid == 0:
-                break
-            procs.remove(pid)
+    # Get auth key from environment
+    # If not provided, library outputs an auth URL
+    authkey = os.environ.get('TS_AUTHKEY')
 
-        conn = ln.accept()
-        pid = os.fork()
-        if pid == 0:
-            return handler(conn)
-        procs.append(pid)
+    with TSNet(ephemeral=True, authkey=authkey) as ts:
+        ts.up()
 
-    ln.close()
-    ts.close()
+        with ts.listen("tcp", ":1999") as ln:
+            print("Listening on :1999")
+            while True:
+                conn = ln.accept()
+                handler(conn)
 
 
 if __name__ == "__main__":
