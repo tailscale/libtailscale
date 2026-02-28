@@ -130,73 +130,59 @@ class TestTailscaleConfig < Minitest::Test
   end
 end
 
-# TestTailscaleNetwork tests operations that require running servers.
-# Two shared servers (s1, s2) are brought up once, matching the approach
-# used by the Go C integration test (tsnetctest): s1 listens, s2 dials.
+# TestTailscaleNetwork tests operations that require a running server.
+# A single shared server is brought up once and used for all tests,
+# including self-dial (listen + dial to own IP on the same node).
 class TestTailscaleNetwork < Minitest::Test
   @@mu = Mutex.new
-  @@s1 = nil
-  @@s2 = nil
-  @@s1_ip = nil
-  @@s2_ip = nil
+  @@server = nil
+  @@ip = nil
   @@tmpdir = nil
 
-  def self.ensure_servers
+  def self.ensure_server
     @@mu.synchronize do
-      return if @@s1
+      return if @@server
       @@tmpdir = Dir.mktmpdir
 
-      @@s1 = make_server(File.join(@@tmpdir, "s1"))
-      @@s2 = make_server(File.join(@@tmpdir, "s2"))
+      dir = File.join(@@tmpdir, "s")
+      FileUtils.mkdir_p(dir)
+      ts = Tailscale.new
+      unless ENV["VERBOSE"]
+        logfd = IO.sysopen("/dev/null", "w+")
+        ts.set_log_fd(logfd)
+      end
+      ts.set_ephemeral(true)
+      ts.set_dir(dir)
+      ts.set_control_url($testcontrol_url)
+      ts.up
 
-      wait_running(@@s1)
-      wait_running(@@s2)
+      deadline = Time.now + 30
+      loop do
+        break if ts.local_api.status["BackendState"] == "Running"
+        raise "timed out waiting for BackendState Running" if Time.now > deadline
+        sleep 0.05
+      end
 
-      @@s1_ip = @@s1.local_api.status["Self"]["TailscaleIPs"][0]
-      @@s2_ip = @@s2.local_api.status["Self"]["TailscaleIPs"][0]
-    end
-  end
-
-  def self.make_server(dir)
-    FileUtils.mkdir_p(dir)
-    ts = Tailscale.new
-    unless ENV["VERBOSE"]
-      logfd = IO.sysopen("/dev/null", "w+")
-      ts.set_log_fd(logfd)
-    end
-    ts.set_ephemeral(true)
-    ts.set_dir(dir)
-    ts.set_control_url($testcontrol_url)
-    ts.up
-    ts
-  end
-
-  def self.wait_running(ts)
-    deadline = Time.now + 30
-    loop do
-      break if ts.local_api.status["BackendState"] == "Running"
-      raise "timed out waiting for BackendState Running" if Time.now > deadline
-      sleep 0.05
+      @@server = ts
+      @@ip = ts.local_api.status["Self"]["TailscaleIPs"][0]
     end
   end
 
   Minitest.after_run do
     @@mu.synchronize do
-      [@@s1, @@s2].compact.each { |s| s.close rescue nil }
-      @@s1 = @@s2 = nil
+      @@server&.close rescue nil
+      @@server = nil
       FileUtils.remove_entry_secure(@@tmpdir) if @@tmpdir
     end
   end
 
   def setup
     super
-    self.class.ensure_servers
+    self.class.ensure_server
   end
 
-  def s1; @@s1; end
-  def s2; @@s2; end
-  def s1_ip; @@s1_ip; end
-  def s2_ip; @@s2_ip; end
+  def ts; @@server; end
+  def ip; @@ip; end
 
   def test_start_async
     tmpdir = Dir.mktmpdir
@@ -211,7 +197,7 @@ class TestTailscaleNetwork < Minitest::Test
     tmpdir = Dir.mktmpdir
     t = newts(tmpdir)
     t.up
-    self.class.wait_running(t)
+    wait_running(t)
     assert_equal "Running", t.local_api.status["BackendState"]
     t.close
     assert_raises(Tailscale::ClosedError) { t.set_hostname("fail") }
@@ -223,14 +209,14 @@ class TestTailscaleNetwork < Minitest::Test
     t = newts(tmpdir)
     t.set_hostname("my-ruby-host")
     t.up
-    self.class.wait_running(t)
+    wait_running(t)
     assert_match(/my-ruby-host/, t.local_api.status["Self"]["HostName"])
     t.close
     FileUtils.remove_entry_secure(tmpdir)
   end
 
   def test_get_ips
-    ips = s1.get_ips
+    ips = ts.get_ips
     assert_kind_of Array, ips
     refute_empty ips
     assert ips.any? { |i| i.start_with?("100.") },
@@ -238,14 +224,14 @@ class TestTailscaleNetwork < Minitest::Test
   end
 
   def test_loopback
-    addr, proxy_cred, local_cred = s1.loopback
+    addr, proxy_cred, local_cred = ts.loopback
     assert_match(/:\d+$/, addr)
     assert_equal 32, proxy_cred.length
     assert_equal 32, local_cred.length
   end
 
   def test_local_api_client
-    client = s1.local_api_client
+    client = ts.local_api_client
     assert_kind_of Tailscale::LocalAPIClient, client
     refute_nil client.address
     refute_nil client.credential
@@ -254,7 +240,7 @@ class TestTailscaleNetwork < Minitest::Test
   end
 
   def test_local_api_status
-    status = s1.local_api.status
+    status = ts.local_api.status
     assert_kind_of Hash, status
     assert_equal "Running", status["BackendState"]
     assert_kind_of Hash, status["Self"]
@@ -262,19 +248,19 @@ class TestTailscaleNetwork < Minitest::Test
   end
 
   def test_listen_and_close
-    s = s1.listen("tcp", ":1999")
+    s = ts.listen("tcp", ":1999")
     s.close
   end
 
   def test_dial_udp
-    c = s2.dial("udp", "100.100.100.100:53")
+    c = ts.dial("udp", "100.100.100.100:53")
     c.close
   end
 
   def test_listen_accept_dial_data_transfer
     Timeout.timeout(30) do
-      ln = s1.listen("tcp", "#{s1_ip}:8081")
-      c = s2.dial("tcp", "#{s1_ip}:8081")
+      ln = ts.listen("tcp", "#{ip}:8081")
+      c = ts.dial("tcp", "#{ip}:8081")
       c.sync = true
       ss = ln.accept
       ss.sync = true
@@ -290,8 +276,8 @@ class TestTailscaleNetwork < Minitest::Test
 
   def test_listen_accept_dial_large_data
     Timeout.timeout(30) do
-      ln = s1.listen("tcp", "#{s1_ip}:8082")
-      c = s2.dial("tcp", "#{s1_ip}:8082")
+      ln = ts.listen("tcp", "#{ip}:8082")
+      c = ts.dial("tcp", "#{ip}:8082")
       c.sync = true
       ss = ln.accept
       ss.sync = true
@@ -314,8 +300,8 @@ class TestTailscaleNetwork < Minitest::Test
 
   def test_get_remote_addr
     Timeout.timeout(30) do
-      ln = s1.listen("tcp", "#{s1_ip}:8083")
-      c = s2.dial("tcp", "#{s1_ip}:8083")
+      ln = ts.listen("tcp", "#{ip}:8083")
+      c = ts.dial("tcp", "#{ip}:8083")
       ss = ln.accept
       remote_addr = ln.get_remote_addr(ss)
       refute_nil remote_addr
@@ -328,6 +314,15 @@ class TestTailscaleNetwork < Minitest::Test
   end
 
   private
+
+  def wait_running(t)
+    deadline = Time.now + 30
+    loop do
+      break if t.local_api.status["BackendState"] == "Running"
+      raise "timed out waiting for BackendState Running" if Time.now > deadline
+      sleep 0.05
+    end
+  end
 
   def newts(dir)
     t = Tailscale.new
