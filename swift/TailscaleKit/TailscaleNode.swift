@@ -1,6 +1,8 @@
 // Copyright (c) Tailscale Inc & AUTHORS
 // SPDX-License-Identifier: BSD-3-Clause
 
+import Foundation
+
 public let kDefaultControlURL = "https://controlplane.tailscale.com"
 
 
@@ -132,6 +134,32 @@ public actor TailscaleNode {
             throw TailscaleError.fromPosixErrCode(res, tailscale.getErrorMessage())
         }
         logger?.log("Brought Tailscale up:\(tailscale)")
+    }
+
+    /// Returns the backend status as the JSON encoding of ipnstate.Status —
+    /// the same document LocalAPI's /localapi/v0/status serves.
+    ///
+    /// Unlike reading /status via loopback()'s HTTP server, this goes through
+    /// tsnet's in-memory LocalAPI listener: it keeps working when the OS
+    /// reclaims the loopback TCP listener from a suspended process (observed
+    /// on iOS), where the cached loopback address goes permanently stale.
+    ///
+    /// @See tailscale_status_json in Tailscale.h
+    ///
+    /// @throws TailscaleError on failure
+    public func statusJSON() async throws -> Data {
+        guard let tailscale else {
+            throw TailscaleError.badInterfaceHandle
+        }
+
+        var out: UnsafeMutablePointer<CChar>?
+        let res = tailscale_status_json(tailscale, &out)
+
+        guard res == 0, let out else {
+            throw TailscaleError.fromPosixErrCode(res, tailscale.getErrorMessage())
+        }
+        defer { free(out) }
+        return Data(bytes: out, count: strlen(out))
     }
 
     /// Tears down the Tailscale server.

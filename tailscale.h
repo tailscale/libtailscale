@@ -175,6 +175,22 @@ extern int tailscale_accept(tailscale_listener listener, tailscale_conn* conn_ou
 // Returns zero on success or -1 on error, call tailscale_errmsg for details.
 extern int tailscale_loopback(tailscale sd, char* addr_out, size_t addrlen, char* proxy_cred_out, char* local_api_cred_out);
 
+// tailscale_status_json writes the backend status (the JSON encoding of
+// ipnstate.Status, the same struct LocalAPI's /localapi/v0/status returns)
+// to *json_out as a NUL-terminated, malloc'd string. The caller owns the
+// string and must release it with free().
+//
+// Unlike reading /status over the tailscale_loopback HTTP server, this
+// goes through tsnet's in-memory LocalAPI listener: it keeps working when
+// the OS reclaims the loopback TCP listener from a suspended process
+// (observed on iOS), where the loopback address goes permanently stale.
+//
+// Returns:
+// 	0     - success, *json_out is set
+// 	EBADF - sd is not a valid tailscale
+// 	-1    - call tailscale_errmsg for details (*json_out is NULL)
+extern int tailscale_status_json(tailscale sd, char** json_out);
+
 // tailscale_enable_funnel_to_localhost_plaintext_http1 configures sd to have
 // Tailscale Funnel enabled, routing requests from the public web
 // (without any authentication) down to this Tailscale node, requesting new 

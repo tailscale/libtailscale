@@ -9,6 +9,7 @@ import "C"
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -18,6 +19,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/unix"
@@ -578,6 +580,38 @@ func TsnetLoopback(sd C.int, addrOut *C.char, addrLen C.size_t, proxyOut *C.char
 	copy(out, localAPICred)
 	out[32] = '\x00'
 
+	return 0
+}
+
+//export TsnetStatusJSON
+func TsnetStatusJSON(sd C.int, jsonOut **C.char) C.int {
+	if jsonOut == nil {
+		panic("status_json passed nil json_out")
+	}
+	*jsonOut = nil
+	s := getServer(sd)
+	if s == nil {
+		return C.EBADF
+	}
+	// LocalClient rides tsnet's in-memory LocalAPI listener — unlike
+	// Loopback()'s TCP listener it cannot be reclaimed by the OS while
+	// the process is suspended (iOS), so status reads keep working on
+	// long-lived nodes.
+	lc, err := s.s.LocalClient()
+	if err != nil {
+		return s.recErr(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	st, err := lc.Status(ctx)
+	if err != nil {
+		return s.recErr(err)
+	}
+	b, err := json.Marshal(st)
+	if err != nil {
+		return s.recErr(err)
+	}
+	*jsonOut = C.CString(string(b))
 	return 0
 }
 
