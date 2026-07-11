@@ -5,6 +5,7 @@
 import UIKit
 #endif
 
+import Foundation
 import Network
 
 public extension URLSessionConfiguration {

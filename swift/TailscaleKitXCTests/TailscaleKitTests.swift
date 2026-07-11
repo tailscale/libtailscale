@@ -1,6 +1,9 @@
 // Copyright (c) Tailscale Inc & AUTHORS
 // SPDX-License-Identifier: BSD-3-Clause
 
+#if canImport(CTstestControl)
+import CTstestControl
+#endif
 import XCTest
 @testable import TailscaleKit
 

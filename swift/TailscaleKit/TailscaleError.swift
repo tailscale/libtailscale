@@ -1,6 +1,9 @@
 // Copyright (c) Tailscale Inc & AUTHORS
 // SPDX-License-Identifier: BSD-3-Clause
 
+#if canImport(CTailscale)
+import CTailscale
+#endif
 import Foundation
 
 public enum TailscaleError: Error {
