@@ -5,7 +5,7 @@
 import Foundation
 import Network
 
-extension URLSessionConfiguration {
+public extension URLSessionConfiguration {
     /// Adds the a ProxyConfiguration to a URLSessionConfiguration to
     /// proxy all requests through the given TailscaleNode.
     ///

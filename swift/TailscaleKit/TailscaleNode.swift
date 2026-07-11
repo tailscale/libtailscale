@@ -52,7 +52,7 @@ public actor TailscaleNode {
     /// new IncomingConnections or OutgoingConnections
     public let tailscale: TailscaleHandle?
 
-    private let logger: LogSink?
+    private let logger: (any LogSink)?
 
     /// Instantiate a new TailscaleNode with the given configuration and
     /// and optional LogSink.  If no LogSink is provided, logs will be
@@ -62,7 +62,7 @@ public actor TailscaleNode {
     /// @See tailscale_start in Tailscale.h
     ///
     /// @throws TailscaleError on failure
-    public init(config: Configuration, logger: LogSink?) throws {
+    public init(config: Configuration, logger: (any LogSink)?) throws {
         self.logger = logger ?? BlackholeLogger()
 
         tailscale = tailscale_new()

@@ -28,7 +28,7 @@ final class MessageReader: NSObject, URLSessionDataDelegate, @unchecked Sendable
     var ipnWatchSession: URLSession?
     var dataTask: URLSessionDataTask?
 
-    var logger: LogSink?
+    var logger: (any LogSink)?
 
     /// FIFO queue for messages awaiting processing
     var pendingMessages: [Data] = []
@@ -39,9 +39,9 @@ final class MessageReader: NSObject, URLSessionDataDelegate, @unchecked Sendable
     /// restart the processor and queue with an .initialState flag.
     var congested = false
 
-    var errorHandler: (@Sendable (Error) -> Void)?
+    var errorHandler: (@Sendable (any Error) -> Void)?
 
-    init(logger: LogSink? = nil) {
+    init(logger: (any LogSink)? = nil) {
         self.logger = logger
         workQueue.maxConcurrentOperationCount = 1
         workQueue.name = "io.tailscale.ipn.MessageReader.workQueue"
@@ -52,7 +52,7 @@ final class MessageReader: NSObject, URLSessionDataDelegate, @unchecked Sendable
         workQueue.cancelAllOperations()
     }
 
-    func start(_ request: URLRequest, config: URLSessionConfiguration, errorHandler: @escaping @Sendable (Error) -> Void  ) {
+    func start(_ request: URLRequest, config: URLSessionConfiguration, errorHandler: @escaping @Sendable (any Error) -> Void  ) {
         workQueue.addOperation { [weak self] in
             guard let self = self else { return }
 
@@ -95,7 +95,7 @@ final class MessageReader: NSObject, URLSessionDataDelegate, @unchecked Sendable
 
     func urlSession(_ session: URLSession,
                     task: URLSessionTask,
-                    didCompleteWithError error: Error?) {
+                    didCompleteWithError error: (any Error)?) {
         if let error = error {
             let nsError = error as NSError
             // Ignore cancellation errors, those are deliberate.

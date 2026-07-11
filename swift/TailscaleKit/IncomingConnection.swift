@@ -25,7 +25,7 @@ import Foundation
 // connections. Annotating the two listener types confines it to them.
 @available(iOS 18.0, macOS 15.0, tvOS 18.0, watchOS 11.0, *)
 public actor IncomingConnection {
-    private let logger: LogSink?
+    private let logger: (any LogSink)?
     private var conn: TailscaleConnection = 0
     private let reader: SocketReader
 
@@ -37,7 +37,7 @@ public actor IncomingConnection {
         stateBroadcaster.subscribe()
     }
 
-    init(conn: TailscaleConnection, remoteAddress: String?, logger: LogSink? = nil) async {
+    init(conn: TailscaleConnection, remoteAddress: String?, logger: (any LogSink)? = nil) async {
         self.logger = logger
         self.conn = conn
         stateBroadcaster.set(.connected)
