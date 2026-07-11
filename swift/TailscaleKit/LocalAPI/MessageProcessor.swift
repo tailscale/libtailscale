@@ -3,18 +3,21 @@
 
 import Foundation
 
+#if canImport(FoundationNetworking)
+    import FoundationNetworking
+#endif
+
 let kJsonNewline = UInt8(ascii: "\n")
 
 /// The polling interval for the message queue
-let kProcessorQueuePollInterval: UInt64 = 100_000_000 // Nanos
+let kProcessorQueuePollInterval: UInt64 = 100_000_000  // Nanos
 
 /// A MessageConsumer consumes incoming messages from the IPNBus and handles any
 /// potential errors.
 public protocol MessageConsumer: Actor {
-     func notify(_ notify: Ipn.Notify)
-     func error(_ error: Error)
+    func notify(_ notify: Ipn.Notify)
+    func error(_ error: Error)
 }
-
 
 /// MessageProcessor pulls queued Decodable messages from a MessageReader, deserializes them
 /// and forwards the deserialized objects and any errors to the consumer.
@@ -23,7 +26,6 @@ public class MessageProcessor: @unchecked Sendable {
     let reader: MessageReader
     let workQueue = OperationQueue()
     var logger: LogSink?
-
 
     // A long running task to poll the queue
     var pollTask: Task<Void, Error>?
@@ -56,7 +58,7 @@ public class MessageProcessor: @unchecked Sendable {
         }
     }
 
-    public  func cancel() {
+    public func cancel() {
         pollTask?.cancel()
     }
 

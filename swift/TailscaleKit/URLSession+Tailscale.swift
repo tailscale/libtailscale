@@ -1,15 +1,10 @@
 // Copyright (c) Tailscale Inc & AUTHORS
 // SPDX-License-Identifier: BSD-3-Clause
 
-#if os(iOS)
-import UIKit
-#endif
-
-import Foundation
+#if canImport(Network)
 import Network
 
-public extension URLSessionConfiguration {
-
+extension URLSessionConfiguration {
     /// Adds the a ProxyConfiguration to a URLSessionConfiguration to
     /// proxy all requests through the given TailscaleNode.
     ///
@@ -40,3 +35,4 @@ public extension URLSessionConfiguration {
         return (session, config)
     }
 }
+#endif

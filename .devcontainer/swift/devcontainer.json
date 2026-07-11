@@ -11,7 +11,12 @@
             "extensions": [
                 "swiftlang.swift-vscode",
                 "golang.go"
-            ]
+            ],
+            "settings": {
+                "[swift]": {
+                    "editor.formatOnSave": false
+                }
+            }
         }
     },
     "postCreateCommand": "go version && swift --version"

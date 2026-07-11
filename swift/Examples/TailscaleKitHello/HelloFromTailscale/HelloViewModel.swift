@@ -1,13 +1,11 @@
 // Copyright (c) Tailscale Inc & AUTHORS
 // SPDX-License-Identifier: BSD-3-Clause
 
-
 import SwiftUI
-@preconcurrency import Combine
 import TailscaleKit
 
 @Observable
-class HelloViewModel: @unchecked Sendable    {
+class HelloViewModel: @unchecked Sendable {
     var message: String = "Ready to phone home!"
     var peerCountMessage = "Waiting for peers...."
     var stateMessage = "Waiting for state...."
@@ -75,7 +73,7 @@ class HelloViewModel: @unchecked Sendable    {
 
     @MainActor
     func setMessage(_ message: String) {
-        self.message =  message
+        self.message = message
     }
 
     func runRequest(_ dialer: Dialer) {

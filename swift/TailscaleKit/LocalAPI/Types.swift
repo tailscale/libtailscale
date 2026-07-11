@@ -1,7 +1,7 @@
 // Copyright (c) Tailscale Inc & AUTHORS
 // SPDX-License-Identifier: BSD-3-Clause
 
-import Foundation
+import FoundationEssentials
 
 public struct Empty: Sendable {
     public struct Message: Codable, Sendable {}
@@ -248,7 +248,7 @@ public struct IpnState: Sendable {
         public var Expired: Bool?
     }
 
-    public  struct PeerStatusLite: Codable, Sendable, Equatable {
+    public struct PeerStatusLite: Codable, Sendable, Equatable {
         public var RxBytes: Int64
         public var TxBytes: Int64
         public var LastHandshake: Time.Time
@@ -258,16 +258,16 @@ public struct IpnState: Sendable {
     public struct Status: Codable, Sendable {
         enum CodingKeys: String, CodingKey {
             case Version,
-                 BackendState,
-                 AuthURL,
-                 TailscaleIPs,
-                 ExitNodeStatus,
-                 Health,
-                 CurrentTailnet,
-                 CertDomains,
-                 Peer,
-                 User,
-                 ClientVersion
+                BackendState,
+                AuthURL,
+                TailscaleIPs,
+                ExitNodeStatus,
+                Health,
+                CurrentTailnet,
+                CertDomains,
+                Peer,
+                User,
+                ClientVersion
             case SelfStatus = "Self"
         }
 
@@ -310,7 +310,7 @@ public struct Netmap: Sendable {
         public var NodeKey: Key.NodePublic
         public var Peers: [Tailcfg.Node]?
         public var Domain: String
-        public var UserProfiles: [String: Tailcfg.UserProfile] // Keys are tailcfg.UserIDs thet get stringified
+        public var UserProfiles: [String: Tailcfg.UserProfile]  // Keys are tailcfg.UserIDs thet get stringified
         public var DNS: Tailcfg.DNSConfig?
 
         public func currentUserProfile() -> Tailcfg.UserProfile? {
@@ -400,7 +400,7 @@ public struct Tailcfg: Sendable {
             }
 
             if let expiryDate = KeyExpiry?.iso8601Date() {
-                return (expiryDate as NSDate).earlierDate(Date()) == expiryDate && !KeyDoesNotExpire
+                return expiryDate < Date()
             }
 
             return false
@@ -496,4 +496,3 @@ struct GoError: Codable, Sendable, LocalizedError {
         return Error
     }
 }
-

@@ -1,11 +1,18 @@
 // Copyright (c) Tailscale Inc & AUTHORS
 // SPDX-License-Identifier: BSD-3-Clause
 
-import Combine
-import Foundation
+import FoundationEssentials
+
+#if canImport(Darwin)
+    import Darwin
+#elseif canImport(Glibc)
+    import Glibc
+#elseif canImport(Musl)
+    import Musl
+#endif
 
 /// IncomingConnection is use to read incoming message from an inbound
-/// connection.   IncomingConnections are not instantiated directly,
+/// connection. IncomingConnections are not instantiated directly,
 /// they are returned by Listener.accept
 public actor IncomingConnection {
     private let logger: LogSink?
@@ -14,41 +21,39 @@ public actor IncomingConnection {
 
     public let remoteAddress: String?
 
-    @Published var _state: ConnectionState = .idle
+    private var stateBroadcaster = StateBroadcaster<ConnectionState>(.idle)
 
-    public func state() -> any AsyncSequence<ConnectionState, Never>  {
-        $_state
-            .removeDuplicates()
-            .eraseToAnyPublisher()
-            .values
+    public func state() -> some AsyncSequence<ConnectionState, Never> {
+        stateBroadcaster.subscribe()
     }
 
     init(conn: TailscaleConnection, remoteAddress: String?, logger: LogSink? = nil) async {
         self.logger = logger
         self.conn = conn
-        _state = .connected
+        stateBroadcaster.set(.connected)
         self.remoteAddress = remoteAddress
         reader = SocketReader(conn: conn)
     }
 
     deinit {
         if conn != 0 {
-            Darwin.close(conn)
+            _ = System.close(conn)
         }
     }
 
     public func close() {
         if conn != 0 {
-            Darwin.close(conn)
+            _ = System.close(conn)
             conn = 0
         }
-        _state = .closed
+        stateBroadcaster.set(.closed)
+        stateBroadcaster.finish()
     }
 
     /// Returns up to size bytes from the connection.  Blocks until
     /// data is available
     public func receive(maximumLength: Int = 4096, timeout: Int32) async throws -> Data {
-        guard _state == .connected else {
+        guard stateBroadcaster.value == .connected else {
             throw TailscaleError.connectionClosed
         }
 
@@ -56,8 +61,8 @@ public actor IncomingConnection {
     }
 
     /// Reads a complete message from the connection
-    public func receiveMessage( timeout: Int32) async throws -> Data {
-        guard _state == .connected else {
+    public func receiveMessage(timeout: Int32) async throws -> Data {
+        guard stateBroadcaster.value == .connected else {
             throw TailscaleError.connectionClosed
         }
 
@@ -71,7 +76,7 @@ private actor SocketReader {
     // of a single packet
     private static let maxBufferSize = 2048
     private let conn: TailscaleConnection
-    private var buffer = [UInt8](repeating:0, count: maxBufferSize)
+    private var buffer = [UInt8](repeating: 0, count: maxBufferSize)
 
     init(conn: TailscaleConnection) {
         self.conn = conn
@@ -85,9 +90,8 @@ private actor SocketReader {
         }
 
         let bytesToRead = min(len, Self.maxBufferSize)
-        var bytesRead = 0
-        buffer.withUnsafeMutableBufferPointer { ptr in
-            bytesRead = Darwin.read(conn, ptr.baseAddress, bytesToRead)
+        let bytesRead = buffer.withUnsafeMutableBufferPointer { ptr in
+            System.read(conn, ptr.baseAddress, bytesToRead)
         }
 
         if bytesRead < 0 {
@@ -108,4 +112,3 @@ private actor SocketReader {
         return data
     }
 }
-
