@@ -1,14 +1,14 @@
 // Copyright (c) Tailscale Inc & AUTHORS
 // SPDX-License-Identifier: BSD-3-Clause
 
-#if canImport(CTailscale)
-import CTailscale
-#endif
 import Foundation
-import Combine
+
+#if canImport(CTailscale)
+    import CTailscale
+#endif
 
 /// ConnectionState indicates the state of individual TSConnection instances
-public enum ConnectionState {
+public enum ConnectionState: Sendable {
     case idle           ///< Reads and writes are not possible.  Connections will transition to connected automatically
     case connected      ///< Connected and ready to read/write
     case closed         ///< Closed and ready to be disposed of.  Closed connections cannot be reconnected.
@@ -16,7 +16,7 @@ public enum ConnectionState {
 }
 
 /// ListenerState indicates the state of individual TSListener instances
-public enum ListenerState {
+public enum ListenerState: Sendable {
     case idle           ///< Waiting.
     case listening      ///< Listening
     case closed         ///< Closed and ready to be disposed of.
@@ -68,7 +68,7 @@ public actor OutgoingConnection {
     /// @See tailscale_dial in Tailscale.h
     ///
     /// @throws TailscaleError on failure
-    public func connect() async throws  {
+    public func connect() async throws {
         let res = tailscale_dial(tailscale, proto.rawValue, address, &conn)
 
         guard res == 0 else {
@@ -81,7 +81,7 @@ public actor OutgoingConnection {
 
     deinit {
         if conn != 0 {
-            Darwin.close(conn)
+            _ = System.close(conn)
         }
     }
 
@@ -90,7 +90,7 @@ public actor OutgoingConnection {
     /// state to .closed
     public func close() {
         if conn != 0 {
-            Darwin.close(conn)
+            _ = System.close(conn)
             conn = 0
         }
         state = .closed
@@ -104,7 +104,7 @@ public actor OutgoingConnection {
             throw TailscaleError.connectionClosed
         }
 
-        let bytesWritten = Darwin.write(conn, data.withUnsafeBytes { $0.baseAddress! }, data.count)
+        let bytesWritten = System.write(conn, data.withUnsafeBytes { $0.baseAddress! }, data.count)
 
         if bytesWritten != data.count {
             throw TailscaleError.shortWrite

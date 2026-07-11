@@ -1,7 +1,11 @@
 // Copyright (c) Tailscale Inc & AUTHORS
 // SPDX-License-Identifier: BSD-3-Clause
 
-import Foundation
+import FoundationEssentials
+
+#if canImport(FoundationNetworking)
+    import FoundationNetworking
+#endif
 
 let kLocalAPIPath = "/localapi/v0/"
 
@@ -38,14 +42,13 @@ public actor LocalAPIClient {
 
     /// The local node that will be handling our localAPI requests.
     let node: TailscaleNode
-    
+
     let logger: LogSink?
 
     public init(localNode: TailscaleNode, logger: LogSink?) {
         self.node = localNode
         self.logger = logger
     }
-
 
     // MARK: - IPN Bus
 
@@ -177,15 +180,15 @@ public actor LocalAPIClient {
             resultTransformer: jsonDecodeTransformer(IpnLocal.LoginProfile.self))
 
         switch result {
-        case .success(let result):  return result
-        case .failure(let error):  throw error
+        case .success(let result): return result
+        case .failure(let error): throw error
         }
     }
 
     public func addProfile() async throws {
         let error = await doSimpleAPIRequest(
             endpoint: .profiles,
-            path: "", // Important, we need the trailing /
+            path: "",  // Important, we need the trailing /
             method: .PUT,
             resultTransformer: errorTransformer)
 
@@ -196,7 +199,7 @@ public actor LocalAPIClient {
     }
 
     public func switchProfile(profileID: String) async throws {
-        let error = await  doSimpleAPIRequest(
+        let error = await doSimpleAPIRequest(
             endpoint: .profiles,
             path: profileID,
             method: .POST,
@@ -227,14 +230,14 @@ public actor LocalAPIClient {
     ///
     /// The majority of the information this returns can be observed using watchIPNBus.
     public func backendStatus() async throws -> IpnState.Status {
-        let result =  await doSimpleAPIRequest(
+        let result = await doSimpleAPIRequest(
             endpoint: .status,
             method: .GET,
             resultTransformer: jsonDecodeTransformer(IpnState.Status.self))
 
         switch result {
-        case .success(let result):  return result
-        case .failure(let error):  throw error
+        case .success(let result): return result
+        case .failure(let error): throw error
         }
     }
 
@@ -246,7 +249,12 @@ public actor LocalAPIClient {
                                      headers: [String: String]? = nil,
                                      params: [URLQueryItem]? = nil) async throws -> (URLRequest, URLSessionConfiguration) {
 
+        #if canImport(Network)
         let (sessionConfig, loopbackConfig) = try await URLSessionConfiguration.tailscaleSession(node)
+        #else
+        let sessionConfig = URLSessionConfiguration.default
+        let loopbackConfig = try await node.loopback()
+        #endif
 
         var endpointPath = endpoint.rawValue
         if let path {
@@ -337,39 +345,39 @@ public actor LocalAPIClient {
         timeoutInterval: TimeInterval = 60,
         resultTransformer: @escaping (_ result: Result<Data, Error>) -> T) async -> T {
 
-            var request: URLRequest
-            var sessionConfig: URLSessionConfiguration
-            do {
-                (request, sessionConfig) = try await self.basicAuthURLRequest(endpoint: endpoint,
-                                                             path: path,
-                                                             method: method,
-                                                             headers: headers,
-                                                             params: params)
+        var request: URLRequest
+        var sessionConfig: URLSessionConfiguration
+        do {
+            (request, sessionConfig) = try await self.basicAuthURLRequest(endpoint: endpoint,
+                                                            path: path,
+                                                            method: method,
+                                                            headers: headers,
+                                                            params: params)
 
-            } catch {
-                return resultTransformer(.failure(error))
-            }
-
-            if let body {
-                request.httpBody = body
-            }
-
-            request.timeoutInterval = timeoutInterval
-
-            do {
-                let session = URLSession(configuration: sessionConfig)
-                let (data, response) = try await session.data(for: request)
-                switch self.parseAPIResponse(data: data, response: response, error: nil) {
-                case .success(let data):
-                    return resultTransformer(.success(data))
-                case .failure(let error):
-                    logger?.log("LocalAPI request to \(path ?? "<none>") failed with \(error)")
-                    return resultTransformer(.failure(error))
-                }
-            } catch {
-                return resultTransformer(.failure(error))
-            }
+        } catch {
+            return resultTransformer(.failure(error))
         }
+
+        if let body {
+            request.httpBody = body
+        }
+
+        request.timeoutInterval = timeoutInterval
+
+        do {
+            let session = URLSession(configuration: sessionConfig)
+            let (data, response) = try await session.data(for: request)
+            switch self.parseAPIResponse(data: data, response: response, error: nil) {
+            case .success(let data):
+                return resultTransformer(.success(data))
+            case .failure(let error):
+                logger?.log("LocalAPI request to \(path ?? "<none>") failed with \(error)")
+                return resultTransformer(.failure(error))
+            }
+        } catch {
+            return resultTransformer(.failure(error))
+        }
+    }
 
     // MARK: - Transformers
 

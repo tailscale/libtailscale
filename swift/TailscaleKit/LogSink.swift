@@ -3,6 +3,14 @@
 
 import Foundation
 
+#if canImport(Darwin)
+    import Darwin
+#elseif canImport(Glibc)
+    import Glibc
+#elseif canImport(Musl)
+    import Musl
+#endif
+
 /// A generic interface for sinking log messages from the Swift wrapper
 /// and go
 public protocol LogSink: Sendable {
