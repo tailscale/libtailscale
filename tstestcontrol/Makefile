@@ -6,7 +6,7 @@
 all: libtstestcontrol.a
 
 libtstestcontrol.a:
-	go build -buildmode=c-archive -o $@
+	go build -buildvcs=false -buildmode=c-archive -o $@
 
 clean:
 	rm -f libtstestcontrol.a
