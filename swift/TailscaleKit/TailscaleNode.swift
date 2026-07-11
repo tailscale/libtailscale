@@ -32,7 +32,7 @@ public struct Configuration: Sendable {
 }
 
 /// The layer 3 protocol to use
-public enum NetProtocol: String {
+public enum NetProtocol: String, Sendable {
     case tcp = "tcp"
     case udp = "udp"
 }
