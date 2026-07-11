@@ -88,7 +88,7 @@ test-spm: ## Run tests via Swift Package Manager (cross-platform, incl. Linux)
 	rm -f ../tstestcontrol/libtstestcontrol.a
 	cd ../tstestcontrol && make all
 	./script/fix-tstestcontrol-archive.sh
-	cd .. && swift test
+	swift test
 
 .PHONY: clean
 clean: ## Clean up build artifacts (including the libtailscale dependencies)
