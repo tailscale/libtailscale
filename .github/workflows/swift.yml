@@ -17,7 +17,7 @@ jobs:
       - name: Test
         run: cd swift && make test
 
-      - name: iOS 
+      - name: iOS
         run: cd swift && make ios-fat
 
       - name: macos 

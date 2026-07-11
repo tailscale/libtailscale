@@ -5,14 +5,19 @@ A minimal SwiftPM executable, built with
 tailnet from a Swift command-line tool using TailscaleKit. Needs no Xcode project.
 
 Unlike `TailscaleKitHello` (an Xcode app that links a prebuilt `.xcframework`), this
-package depends directly on the root `Package.swift`, exercising the same SwiftPM path
-covered by `swift test`/`swift test-spm`.
+package depends directly on `swift/Package.swift`, exercising the same SwiftPM path
+covered by `swift test`/`make test-spm`.
 
-**Linux only for now.** The root package's `CTailscale` binaryTarget
-(`swift/build/TailscaleKit.artifactbundle`) currently only ships `x86_64`/`aarch64` Linux
-variants, so `swift build`/`swift run` here only work on Linux. On macOS/iOS, use
-`TailscaleKitHello` (Xcode + the `.xcframework` built by `swift/Makefile`'s
-`macos`/`ios-fat` targets) instead.
+**Linux and macOS** (arm64/x86_64). `swift/script/build-artifactbundle.sh` builds a Linux
+variant of `CTailscale` from any host via cross-compilation, plus a native macOS variant
+when run *on* macOS (Go/cgo needs a real Mach-O toolchain, so that leg can't be
+cross-built from Linux). iOS has no SPM path; for that, use `TailscaleKitHello` (Xcode +
+the `.xcframework` built by `swift/Makefile`'s `ios-fat` target).
+
+On a fresh macOS checkout, make sure `objcopy`/`llvm-objcopy` is reachable (`xcrun -f
+llvm-objcopy` if you have a swift.org toolchain installed, otherwise `brew install llvm`
+or `brew install binutils`) - `fix-tstestcontrol-archive.sh` needs it, and macOS doesn't
+ship one by default.
 
 ## Setup
 

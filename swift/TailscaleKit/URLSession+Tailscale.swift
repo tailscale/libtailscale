@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #if canImport(Network)
+import Foundation
 import Network
 
 extension URLSessionConfiguration {
