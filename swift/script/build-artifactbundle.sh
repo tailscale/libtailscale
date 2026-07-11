@@ -9,8 +9,12 @@
 #
 # Linux triples are cross-compiled from any host given a real cross C
 # toolchain per target triple (on Debian/Ubuntu, `apt-get install
-# gcc-x86-64-linux-gnu gcc-aarch64-linux-gnu` covers both). Override
-# CC_<mangled triple> to point at a different compiler for a given triple.
+# gcc-x86-64-linux-gnu gcc-aarch64-linux-gnu libc6-dev-amd64-cross
+# libc6-dev-arm64-cross` covers both - the gcc packages alone are enough for
+# whichever arch matches the host, but the other triple needs its libc6-dev-*
+# -cross package too or cgo fails with "bits/libc-header-start.h: No such
+# file or directory"). Override CC_<mangled triple> to point at a different
+# compiler for a given triple.
 #
 # macOS triples can only be built when this script itself runs on macOS -
 # Go's cgo needs a real Mach-O-emitting C toolchain, which isn't available
@@ -75,7 +79,7 @@ build_variant() {
     (
         cd "$REPO_ROOT"
         CC="$cc" CGO_ENABLED=1 GOOS="$goos" GOARCH="$goarch" \
-            go build -buildmode=c-archive -o "$variant_dir/libtailscale.a" .
+            go build -buildvcs=false -buildmode=c-archive -o "$variant_dir/libtailscale.a" .
     )
     rm -f "$variant_dir/libtailscale.h" # go build also writes a header; we ship our own below
 

@@ -38,7 +38,7 @@ jobs:
       - name: Install cross toolchains
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends build-essential gcc-x86-64-linux-gnu gcc-aarch64-linux-gnu
+          apt-get install -y --no-install-recommends build-essential gcc-x86-64-linux-gnu gcc-aarch64-linux-gnu libc6-dev-amd64-cross libc6-dev-arm64-cross
 
       - name: Test
         run: cd swift && make test-spm
