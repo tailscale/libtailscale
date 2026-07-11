@@ -15,7 +15,7 @@ public actor Listener {
     private var proto: NetProtocol
     private var address: String
 
-    private let logger: LogSink?
+    private let logger: (any LogSink)?
 
     private var stateBroadcaster = StateBroadcaster<ListenerState>(.idle)
 
@@ -32,7 +32,7 @@ public actor Listener {
     public init(tailscale: TailscaleHandle,
          proto: NetProtocol,
          address: String,
-         logger: LogSink? = nil) async throws {
+         logger: (any LogSink)? = nil) async throws {
         self.logger = logger
         self.tailscale = tailscale
         self.address = address

@@ -37,7 +37,7 @@ public actor OutgoingConnection {
     private var address: String
     private var conn: TailscaleConnection = 0
 
-    private let logger: LogSink
+    private let logger: any LogSink
 
     /// The state of the connection.  Listen for transitions to determine
     /// if the connection may be used for send/receive operations.
@@ -54,7 +54,7 @@ public actor OutgoingConnection {
     public init(tailscale: TailscaleHandle,
          to address: String,
          proto: NetProtocol,
-         logger: LogSink) async throws {
+         logger: any LogSink) async throws {
 
         self.logger = logger
         self.proto = proto

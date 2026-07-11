@@ -19,7 +19,7 @@ import Foundation
 /// connection. IncomingConnections are not instantiated directly,
 /// they are returned by Listener.accept
 public actor IncomingConnection {
-    private let logger: LogSink?
+    private let logger: (any LogSink)?
     private var conn: TailscaleConnection = 0
     private let reader: SocketReader
 
@@ -31,7 +31,7 @@ public actor IncomingConnection {
         stateBroadcaster.subscribe()
     }
 
-    init(conn: TailscaleConnection, remoteAddress: String?, logger: LogSink? = nil) async {
+    init(conn: TailscaleConnection, remoteAddress: String?, logger: (any LogSink)? = nil) async {
         self.logger = logger
         self.conn = conn
         stateBroadcaster.set(.connected)

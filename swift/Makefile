@@ -80,14 +80,24 @@ test: ## Run tests (macOS)
 	 -destination 'platform=macOS,arch=arm64' \
 	 CODE_SIGNING_ALLOWED=NO
 
-.PHONY: test-spm
-test-spm: ## Run tests via Swift Package Manager (cross-platform, incl. Linux)
+.PHONY: spm-setup
+spm-setup: ## Build the artifact bundle needed for swift build/swift run. Run once, then swift build/run as many times as you like (cross-platform, incl. Linux)
 	@echo
-	@echo "::: Running tests for TailscaleKit via swift test :::"
+	@echo "::: Building SwiftPM artifact bundle for TailscaleKit :::"
 	./script/build-artifactbundle.sh
+
+.PHONY: spm-test-setup
+spm-test-setup: spm-setup ## Additionally build libtstestcontrol.a needed for swift test. Run once, then swift test as many times as you like
+	@echo
+	@echo "::: Building libtstestcontrol.a for TailscaleKit tests :::"
 	rm -f ../tstestcontrol/libtstestcontrol.a
 	cd ../tstestcontrol && make all
 	./script/fix-tstestcontrol-archive.sh
+
+.PHONY: test-spm
+test-spm: spm-test-setup ## Run tests via Swift Package Manager (cross-platform, incl. Linux)
+	@echo
+	@echo "::: Running tests for TailscaleKit via swift test :::"
 	swift test
 
 .PHONY: clean
