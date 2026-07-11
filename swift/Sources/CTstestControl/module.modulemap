@@ -1,0 +1,5 @@
+module CTstestControl [system] {
+    header "shim.h"
+    link "tstestcontrol"
+    export *
+}
