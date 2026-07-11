@@ -61,9 +61,11 @@ ios-fat: ios-sim ios ## Builds TailscaleKit.xcframework to swift/build/Build/Pro
 
 .PHONY: test
 test: ## Run tests (macOS)
-	@echo 
+	@echo
 	@echo "::: Running tests for TailscaleKit :::"
+	rm -f ../tstestcontrol/libtstestcontrol.a
 	cd ../tstestcontrol && make all
+	rm -f ../libtailscale.a ../libtailscale.h
 	cd .. && make c-archive
 	mkdir -p build
 	xcodebuild build-for-testing -scheme TailscaleKitXCTests \
@@ -77,6 +79,16 @@ test: ## Run tests (macOS)
 	 -configuration Debug \
 	 -destination 'platform=macOS,arch=arm64' \
 	 CODE_SIGNING_ALLOWED=NO
+
+.PHONY: test-spm
+test-spm: ## Run tests via Swift Package Manager (cross-platform, incl. Linux)
+	@echo
+	@echo "::: Running tests for TailscaleKit via swift test :::"
+	./script/build-artifactbundle.sh
+	rm -f ../tstestcontrol/libtstestcontrol.a
+	cd ../tstestcontrol && make all
+	./script/fix-tstestcontrol-archive.sh
+	cd .. && swift test
 
 .PHONY: clean
 clean: ## Clean up build artifacts (including the libtailscale dependencies)

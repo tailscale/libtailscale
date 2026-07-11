@@ -26,6 +26,8 @@ public protocol LogSink: Sendable {
 public struct DefaultLogger: LogSink {
     public var logFileHandle: Int32? = STDOUT_FILENO
 
+    public init() {}
+
     public func log(_ message: String) {
         NSLog(message)
     }
@@ -34,6 +36,8 @@ public struct DefaultLogger: LogSink {
 /// Discards all logs
 public struct BlackholeLogger: LogSink {
     public var logFileHandle: Int32?
+
+    public init() {}
 
     public func log(_ message: String) {
         // Go back to the Shadow!
