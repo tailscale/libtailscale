@@ -7,6 +7,10 @@ import Foundation
     import CTailscale
 #endif
 
+#if canImport(Combine)
+import Combine
+#endif
+
 /// A Listener is used to await incoming connections from another
 /// Tailnet node.
 // Gated so the rest of TailscaleKit can be built for older systems.
@@ -23,10 +27,21 @@ public actor Listener {
 
     private let logger: (any LogSink)?
 
+    #if canImport(Combine)
+    @Published var _state: ListenerState = .idle
+    #else
     private var stateBroadcaster = StateBroadcaster<ListenerState>(.idle)
+    #endif
 
     public func state() -> some AsyncSequence<ListenerState, Never> {
+        #if canImport(Combine)
+        $_state
+            .removeDuplicates()
+            .eraseToAnyPublisher()
+            .values
+        #else
         stateBroadcaster.subscribe()
+        #endif
     }
 
     /// Initializes and readies a new listener
@@ -47,13 +62,13 @@ public actor Listener {
         let res = tailscale_listen(tailscale, proto.rawValue, address, &listener)
 
         guard res == 0 else {
-            stateBroadcaster.set(.failed)
+            setConnectionState(.failed)
             let msg = tailscale.getErrorMessage()
             let err = TailscaleError.fromPosixErrCode(res, msg)
             logger?.log("Listener failed to initialize: \(msg) (\(err.localizedDescription))")
             throw err
         }
-        stateBroadcaster.set(.listening)
+        setConnectionState(.listening)
     }
 
     deinit {
@@ -69,8 +84,7 @@ public actor Listener {
             _ = System.close(listener)
             listener = 0
         }
-        stateBroadcaster.set(.closed)
-        stateBroadcaster.finish()
+        setConnectionState(.closed)
     }
 
     /// Blocks and awaits a new incoming connection
@@ -131,5 +145,16 @@ public actor Listener {
         return await IncomingConnection(conn: connfd,
                               remoteAddress: remoteAddress,
                               logger: logger)
+    }
+
+    private func setConnectionState(_ state: ListenerState) {
+        #if canImport(Combine)
+        _state = state
+        #else
+        stateBroadcaster.set(state)
+        if state == .closed {
+            stateBroadcaster.finish()
+        }
+        #endif
     }
 }
