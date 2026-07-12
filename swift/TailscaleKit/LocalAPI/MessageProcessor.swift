@@ -3,18 +3,21 @@
 
 import Foundation
 
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
+
 let kJsonNewline = UInt8(ascii: "\n")
 
 /// The polling interval for the message queue
-let kProcessorQueuePollInterval: UInt64 = 100_000_000 // Nanos
+let kProcessorQueuePollInterval: UInt64 = 100_000_000  // Nanos
 
 /// A MessageConsumer consumes incoming messages from the IPNBus and handles any
 /// potential errors.
 public protocol MessageConsumer: Actor {
-     func notify(_ notify: Ipn.Notify)
-     func error(_ error: Error)
+    func notify(_ notify: Ipn.Notify)
+    func error(_ error: any Error)
 }
-
 
 /// MessageProcessor pulls queued Decodable messages from a MessageReader, deserializes them
 /// and forwards the deserialized objects and any errors to the consumer.
@@ -22,13 +25,12 @@ public class MessageProcessor: @unchecked Sendable {
     let consumer: any MessageConsumer
     let reader: MessageReader
     let workQueue = OperationQueue()
-    var logger: LogSink?
-
+    var logger: (any LogSink)?
 
     // A long running task to poll the queue
-    var pollTask: Task<Void, Error>?
+    var pollTask: Task<Void, any Error>?
 
-    init(consumer: any MessageConsumer, logger: LogSink?) async {
+    init(consumer: any MessageConsumer, logger: (any LogSink)?) async {
         workQueue.maxConcurrentOperationCount = 1
         workQueue.name = "io.tailscale.ipn.MessageProcessor.workQueue"
 
@@ -42,7 +44,7 @@ public class MessageProcessor: @unchecked Sendable {
         reader.stop()
     }
 
-    func start(_ request: URLRequest, config: URLSessionConfiguration, errorHandler: (@Sendable (Error) -> Void)? = nil) {
+    func start(_ request: URLRequest, config: URLSessionConfiguration, errorHandler: (@Sendable (any Error) -> Void)? = nil) {
         workQueue.addOperation { [weak self] in
             guard let self = self else { return }
             logger?.log("Starting MessageProcessor for \(request.url?.absoluteString ?? "nil")")
@@ -56,7 +58,7 @@ public class MessageProcessor: @unchecked Sendable {
         }
     }
 
-    public  func cancel() {
+    public func cancel() {
         pollTask?.cancel()
     }
 
@@ -97,7 +99,7 @@ public class MessageProcessor: @unchecked Sendable {
         }
     }
 
-    func processError(_ error: Error) {
+    func processError(_ error: any Error) {
         Task {
             await consumer.error(error)
         }

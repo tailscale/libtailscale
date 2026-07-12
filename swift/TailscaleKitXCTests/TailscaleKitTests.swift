@@ -1,38 +1,49 @@
 // Copyright (c) Tailscale Inc & AUTHORS
 // SPDX-License-Identifier: BSD-3-Clause
 
-import XCTest
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
+import Foundation
+#endif
+#if canImport(CTstestControl)
+import CTstestControl
+#endif
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
+import Testing
 @testable import TailscaleKit
 
-final class TailscaleKitTests: XCTestCase {
-    var controlURL: String = ""
+@Suite 
+struct TailscaleKitTests: ~Copyable {
+    let controlURL: String
 
-    override func setUp() async throws {
-        if controlURL == "" {
-            var buf = [CChar](repeating:0, count: 1024)
-            let res = buf.withUnsafeMutableBufferPointer { ptr in
-                return run_control(ptr.baseAddress!, 1024)
-            }
-            let len = buf.firstIndex(where: { $0 == 0 }) ?? 0
-            let str = buf[0..<len]
-            controlURL = String(validating: str, as: UTF8.self) ?? ""
-            guard !controlURL.isEmpty else {
-                throw TailscaleError.invalidControlURL
-            }
-            if res == 0 {
-                print("Started control with url \(controlURL)")
-            }
+    init() throws {
+        var buf = [CChar](repeating: 0, count: 1024)
+        let res = buf.withUnsafeMutableBufferPointer { ptr in
+            run_control(ptr.baseAddress!, 1024)
+        }
+        let len = buf.firstIndex(where: { $0 == 0 }) ?? 0
+        controlURL = String(validating: buf[0..<len], as: UTF8.self) ?? ""
+        guard !controlURL.isEmpty else {
+            throw TailscaleError.invalidControlURL
+        }
+        if res == 0 {
+            print("Started control with url \(controlURL)")
         }
     }
 
-    override func tearDown() async throws {
+    deinit {
         stop_control()
     }
 
+    @Test 
     func testV4() async throws {
         try await runConnectionTests(for: .v4)
     }
 
+    @Test 
     func testV6() async throws {
         try await runConnectionTests(for: .v6)
     }
@@ -55,9 +66,6 @@ final class TailscaleKitTests: XCTestCase {
             print("ts1 addresses are \(ts1_addr)")
             print("ts2_adddreses are \(ts2_addr)")
 
-            let msgReceived = expectation(description: "ex")
-            let lisetnerUp = expectation(description: "lisetnerUp")
-
             var listenerAddr: String?
 
             switch netType {
@@ -68,41 +76,37 @@ final class TailscaleKitTests: XCTestCase {
                 // in the C code if you listen on an invalid addr.
                 listenerAddr = if let a = ts1_addr.ip6 { "[\(a)]"} else { nil }
             case .none:
-                XCTFail("Invalid IP Type")
+                Issue.record("Invalid IP Type")
             }
 
             guard let ts1Handle = await ts1.tailscale,
                   let ts2Handle = await ts2.tailscale,
                   let listenerAddr else {
-                XCTFail("Setup failed")
+                Issue.record("Setup failed")
                 return
             }
 
-            // Run a listener in a separate task, wait for the inbound
-            // connection and read the data
-            Task {
-                let listener = try await Listener(tailscale: ts1Handle,
-                                                  proto: .tcp,
-                                                  address: ":8081",
-                                                  logger: logger)
-                lisetnerUp.fulfill()
+            // Creating the Listener performs tailscale_listen synchronously, so
+            // by the time this returns something is already listening.
+            let listener = try await Listener(tailscale: ts1Handle,
+                                              proto: .tcp,
+                                              address: ":8081",
+                                              logger: logger)
+
+            // Accept the inbound connection and read the message concurrently
+            // with dialing out below.
+            func receiveMessage() async throws -> Data {
                 let inbound = try await listener.accept()
                 await listener.close()
 
                 // We can trust the backend here but this is slightly flaky since remoteAddress can be
                 // nil for legitimate reasons.
                 // let inboundIP = await inbound.remoteAddress
-                // XCTAssertEqual(inboundIP, writerAddr)
+                // #expect(inboundIP == writerAddr)
 
-                let got = try await inbound.receiveMessage(timeout: 2)
-                print("got \(got)")
-                XCTAssert(got == want)
-
-                msgReceived.fulfill()
+                return try await inbound.receiveMessage(timeout: 2)
             }
-
-            //Make sure somebody is listening
-            await fulfillment(of: [lisetnerUp], timeout: 5.0)
+            async let receivedMessage = receiveMessage()
 
             let outgoing = try await OutgoingConnection(tailscale: ts2Handle,
                                             to: "\(listenerAddr):8081",
@@ -113,7 +117,9 @@ final class TailscaleKitTests: XCTestCase {
             print("sending \(want)")
             try await outgoing.send(want)
 
-            await fulfillment(of: [msgReceived], timeout: 5.0)
+            let got = try await receivedMessage
+            print("got \(got)")
+            #expect(got == want)
 
             print("closing  conn")
             await outgoing.close()
@@ -121,27 +127,27 @@ final class TailscaleKitTests: XCTestCase {
             try await ts1.down()
             try await ts2.down()
         } catch {
-            XCTFail("Init Failed: \(error)")
+            Issue.record("Init Failed: \(error)")
         }
     }
 
-    /// The hostCount here is load bearing.  Each mock host must have a unique
-    /// path and hostname.
-    var hostCount = 0
+    /// Each mock host must have a unique path and hostname; a UUID guarantees
+    /// that without needing mutable state on the suite.
     func mockConfig() -> Configuration {
-        let temp = getDocumentDirectoryPath().absoluteString + "tailscale\(hostCount)"
-        hostCount += 1
+        let id = UUID().uuidString
+        let temp = getDocumentDirectoryPath().appending(path: "tailscale-\(id)").path
         return Configuration(
-            hostName: "testHost-\(hostCount)",
+            hostName: "testHost-\(id)",
             path: temp,
             authKey: nil,
             controlURL: controlURL,
             ephemeral: false)
     }
 
-
+    #if canImport(Network)
     /// Tests that we can fetch a URL via our proxy (though this isn't a URL
     /// on the tailnet...)
+    @Test 
     func testProxy() async throws {
         let config = mockConfig()
         let logger = BlackholeLogger()
@@ -158,11 +164,13 @@ final class TailscaleKitTests: XCTestCase {
             let (data, _) = try await session.data(for: req)
 
             print("Got proxied data \(data.count)")
-            XCTAssert(data.count > 0)
+            #expect(data.count > 0)
         }
     }
+    #endif
 
     /// Tests that localAPI is functional
+    @Test 
     func testStatus() async throws {
         let config = mockConfig()
         let logger = BlackholeLogger()
@@ -174,16 +182,15 @@ final class TailscaleKitTests: XCTestCase {
             // The local node should be running and online
             let api = LocalAPIClient(localNode: ts1, logger: logger)
             let status = try await api.backendStatus()
-            XCTAssertEqual(status.BackendState, "Running")
+            #expect(status.BackendState == "Running")
 
             let peerStatus = status.SelfStatus!
-            XCTAssertTrue(peerStatus.Online)
+            #expect(peerStatus.Online)
         } catch {
-            XCTFail(error.localizedDescription)
+            Issue.record("\(error.localizedDescription)")
         }
     }
 }
-
 
 func getDocumentDirectoryPath() -> URL {
     let arrayPaths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)

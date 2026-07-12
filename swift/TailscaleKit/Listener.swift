@@ -1,26 +1,41 @@
 // Copyright (c) Tailscale Inc & AUTHORS
 // SPDX-License-Identifier: BSD-3-Clause
 
-import Combine
 import Foundation
+
+#if canImport(CTailscale)
+import CTailscale
+#endif
+
+#if canImport(Combine)
+import Combine
+#endif
 
 /// A Listener is used to await incoming connections from another
 /// Tailnet node.
 public actor Listener {
-    private var tailscale: TailscaleHandle 
+    private var tailscale: TailscaleHandle
     private var listener: TailscaleListener = 0
     private var proto: NetProtocol
     private var address: String
 
-    private let logger: LogSink?
+    private let logger: (any LogSink)?
 
+    #if canImport(Combine)
     @Published var _state: ListenerState = .idle
+    #else
+    private var stateBroadcaster = StateBroadcaster<ListenerState>(.idle)
+    #endif
 
-    public func state() -> any AsyncSequence<ListenerState, Never> {
+    public func state() -> some AsyncSequence<ListenerState, Never> {
+        #if canImport(Combine)
         $_state
             .removeDuplicates()
             .eraseToAnyPublisher()
             .values
+        #else
+        stateBroadcaster.subscribe()
+        #endif
     }
 
     /// Initializes and readies a new listener
@@ -32,7 +47,7 @@ public actor Listener {
     public init(tailscale: TailscaleHandle,
          proto: NetProtocol,
          address: String,
-         logger: LogSink? = nil) async throws {
+         logger: (any LogSink)? = nil) async throws {
         self.logger = logger
         self.tailscale = tailscale
         self.address = address
@@ -41,18 +56,18 @@ public actor Listener {
         let res = tailscale_listen(tailscale, proto.rawValue, address, &listener)
 
         guard res == 0 else {
-            _state = .failed
+            setConnectionState(.failed)
             let msg = tailscale.getErrorMessage()
             let err = TailscaleError.fromPosixErrCode(res, msg)
             logger?.log("Listener failed to initialize: \(msg) (\(err.localizedDescription))")
             throw err
         }
-        _state = .listening
+        setConnectionState(.listening)
     }
 
     deinit {
         if listener != 0 {
-            Darwin.close(listener)
+            _ = System.close(listener)
         }
     }
 
@@ -60,10 +75,10 @@ public actor Listener {
     /// Listeners will be closed automatically on deallocation
     public func close() {
         if listener != 0 {
-            Darwin.close(listener)
+            _ = System.close(listener)
             listener = 0
         }
-        _state = .closed
+        setConnectionState(.closed)
     }
 
     /// Blocks and awaits a new incoming connection
@@ -106,7 +121,7 @@ public actor Listener {
         /// We extract the remove address here for utility so you know
         /// who's calling, so you can dial back.
         var remoteAddress: String?
-        var buffer = [Int8](repeating:0, count: 64)
+        var buffer = [Int8](repeating: 0, count: 64)
         buffer.withUnsafeMutableBufferPointer { buf in
             let err = tailscale_getremoteaddr(listener, connfd, buf.baseAddress, 64)
             if err == 0 {
@@ -124,5 +139,16 @@ public actor Listener {
         return await IncomingConnection(conn: connfd,
                               remoteAddress: remoteAddress,
                               logger: logger)
+    }
+
+    private func setConnectionState(_ state: ListenerState) {
+        #if canImport(Combine)
+        _state = state
+        #else
+        stateBroadcaster.set(state)
+        if state == .closed {
+            stateBroadcaster.finish()
+        }
+        #endif
     }
 }

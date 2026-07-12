@@ -1,7 +1,23 @@
 // Copyright (c) Tailscale Inc & AUTHORS
 // SPDX-License-Identifier: BSD-3-Clause
 
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
 import Foundation
+#endif
+
+#if canImport(CTailscale)
+import CTailscale
+#endif
+
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#elseif canImport(Musl)
+import Musl
+#endif
 
 public enum TailscaleError: Error {
     case badInterfaceHandle     ///< The tailscale handle is bad.
@@ -23,13 +39,12 @@ public enum TailscaleError: Error {
         if code == -1 {
             return .internalError(details)
         }
-        if let code = POSIXErrorCode(rawValue: code){
-            return .posixError( POSIXError(code))
+        if let code = POSIXErrorCode(rawValue: code) {
+            return .posixError(POSIXError(code))
         }
         return unknownPosixError(code, details)
     }
 }
-
 
 extension TailscaleHandle {
     static let kMaxErrorMessageLength: Int = 256

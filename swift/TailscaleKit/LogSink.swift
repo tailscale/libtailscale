@@ -3,6 +3,14 @@
 
 import Foundation
 
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#elseif canImport(Musl)
+import Musl
+#endif
+
 /// A generic interface for sinking log messages from the Swift wrapper
 /// and go
 public protocol LogSink: Sendable {
@@ -18,6 +26,8 @@ public protocol LogSink: Sendable {
 public struct DefaultLogger: LogSink {
     public var logFileHandle: Int32? = STDOUT_FILENO
 
+    public init() {}
+
     public func log(_ message: String) {
         NSLog(message)
     }
@@ -26,6 +36,8 @@ public struct DefaultLogger: LogSink {
 /// Discards all logs
 public struct BlackholeLogger: LogSink {
     public var logFileHandle: Int32?
+
+    public init() {}
 
     public func log(_ message: String) {
         // Go back to the Shadow!

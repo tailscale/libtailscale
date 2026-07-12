@@ -3,7 +3,7 @@ name: swift
 on: [push]
 
 jobs:
-  build:
+  build-macos:
 
     runs-on: macos-15
     steps:
@@ -17,8 +17,28 @@ jobs:
       - name: Test
         run: cd swift && make test
 
-      - name: iOS 
+      - name: iOS
         run: cd swift && make ios-fat
 
       - name: macos 
         run: cd swift && make macos 
+
+  build-linux:
+
+    runs-on: ubuntu-latest
+    container: swift:6.3
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.25.5"
+
+      - name: Install cross toolchains
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends build-essential gcc-x86-64-linux-gnu gcc-aarch64-linux-gnu libc6-dev-amd64-cross libc6-dev-arm64-cross
+
+      - name: Test
+        run: cd swift && make test-spm
