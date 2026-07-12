@@ -56,7 +56,7 @@ public actor IncomingConnection {
 
     /// Returns up to size bytes from the connection.  Blocks until
     /// data is available
-    public func receive(maximumLength: Int = 4096, timeout: Int32) async throws -> Data {
+    public func receive(maximumLength: Int = 4096, timeout: TimeInterval) async throws -> Data {
         guard stateBroadcaster.value == .connected else {
             throw TailscaleError.connectionClosed
         }
@@ -65,7 +65,7 @@ public actor IncomingConnection {
     }
 
     /// Reads a complete message from the connection
-    public func receiveMessage(timeout: Int32) async throws -> Data {
+    public func receiveMessage(timeout: TimeInterval) async throws -> Data {
         guard stateBroadcaster.value == .connected else {
             throw TailscaleError.connectionClosed
         }
@@ -86,9 +86,13 @@ private actor SocketReader {
         self.conn = conn
     }
 
-    func read(timeout: Int32, len: Int) throws -> Data {
+    func read(timeout: TimeInterval, len: Int) throws -> Data {
+        guard timeout >= 0, timeout * 1000 <= Double(Int32.max) else {
+            throw TailscaleError.invalidTimeout
+        }
+
         var p: pollfd = .init(fd: conn, events: Int16(POLLIN), revents: 0)
-        let res = poll(&p, 1, timeout)
+        let res = poll(&p, 1, Int32(timeout * 1000))
         guard res > 0 else {
             throw TailscaleError.readFailed
         }
@@ -104,7 +108,7 @@ private actor SocketReader {
         return Data(buffer[0..<bytesRead])
     }
 
-    func readAll(timeout: Int32) throws -> Data {
+    func readAll(timeout: TimeInterval) throws -> Data {
         var data: Data = .init()
         while true {
             let read = try read(timeout: timeout, len: Self.maxBufferSize)
