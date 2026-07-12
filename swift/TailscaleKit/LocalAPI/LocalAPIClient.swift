@@ -8,7 +8,7 @@ import Foundation
 #endif
 
 #if canImport(FoundationNetworking)
-    import FoundationNetworking
+import FoundationNetworking
 #endif
 
 let kLocalAPIPath = "/localapi/v0/"

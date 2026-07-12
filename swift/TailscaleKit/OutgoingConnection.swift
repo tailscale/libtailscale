@@ -4,7 +4,7 @@
 import Foundation
 
 #if canImport(CTailscale)
-    import CTailscale
+import CTailscale
 #endif
 
 /// ConnectionState indicates the state of individual TSConnection instances

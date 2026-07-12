@@ -4,7 +4,7 @@
 import Foundation
 
 #if canImport(FoundationNetworking)
-    import FoundationNetworking
+import FoundationNetworking
 #endif
 
 let kJsonNewline = UInt8(ascii: "\n")
