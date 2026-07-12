@@ -7,6 +7,10 @@ import FoundationEssentials
 import Foundation
 #endif
 
+#if canImport(Combine)
+import Combine
+#endif
+
 #if canImport(Darwin)
     import Darwin
 #elseif canImport(Glibc)
@@ -25,18 +29,29 @@ public actor IncomingConnection {
 
     public let remoteAddress: String?
 
+    #if canImport(Combine)
+    @Published var _state: ConnectionState = .idle
+    #else
     private var stateBroadcaster = StateBroadcaster<ConnectionState>(.idle)
+    #endif
 
     public func state() -> some AsyncSequence<ConnectionState, Never> {
+        #if canImport(Combine)
+        $_state
+            .removeDuplicates()
+            .eraseToAnyPublisher()
+            .values
+        #else
         stateBroadcaster.subscribe()
+        #endif
     }
 
     init(conn: TailscaleConnection, remoteAddress: String?, logger: (any LogSink)? = nil) async {
         self.logger = logger
         self.conn = conn
-        stateBroadcaster.set(.connected)
         self.remoteAddress = remoteAddress
-        reader = SocketReader(conn: conn)
+        self.reader = SocketReader(conn: conn)
+        setConnectionState(.connected)
     }
 
     deinit {
@@ -50,14 +65,13 @@ public actor IncomingConnection {
             _ = System.close(conn)
             conn = 0
         }
-        stateBroadcaster.set(.closed)
-        stateBroadcaster.finish()
+        setConnectionState(.closed)
     }
 
     /// Returns up to size bytes from the connection.  Blocks until
     /// data is available
     public func receive(maximumLength: Int = 4096, timeout: TimeInterval) async throws -> Data {
-        guard stateBroadcaster.value == .connected else {
+        guard connectionState == .connected else {
             throw TailscaleError.connectionClosed
         }
 
@@ -66,11 +80,30 @@ public actor IncomingConnection {
 
     /// Reads a complete message from the connection
     public func receiveMessage(timeout: TimeInterval) async throws -> Data {
-        guard stateBroadcaster.value == .connected else {
+        guard connectionState == .connected else {
             throw TailscaleError.connectionClosed
         }
 
         return try await reader.readAll(timeout: timeout)
+    }
+
+    private var connectionState: ConnectionState {
+        #if canImport(Combine)
+        _state
+        #else
+        stateBroadcaster.value
+        #endif
+    }
+
+    private func setConnectionState(_ state: ConnectionState) {
+        #if canImport(Combine)
+        _state = state
+        #else
+        stateBroadcaster.set(state)
+        if state == .closed {
+            stateBroadcaster.finish()
+        }
+        #endif
     }
 }
 
