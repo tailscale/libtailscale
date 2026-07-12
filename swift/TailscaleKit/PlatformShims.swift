@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #if canImport(Darwin)
-    import Darwin
+import Darwin
 #elseif canImport(Glibc)
-    import Glibc
+import Glibc
 #elseif canImport(Musl)
-    import Musl
+import Musl
 #endif
 
 // Namespace for the platform libc calls. Actor types in this module declare

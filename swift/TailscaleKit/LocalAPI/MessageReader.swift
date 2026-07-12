@@ -4,7 +4,7 @@
 import Foundation
 
 #if canImport(FoundationNetworking)
-    import FoundationNetworking
+import FoundationNetworking
 #endif
 
 enum MessageQueueError: Error {

@@ -8,15 +8,15 @@ import Foundation
 #endif
 
 #if canImport(CTailscale)
-    import CTailscale
+import CTailscale
 #endif
 
 #if canImport(Darwin)
-    import Darwin
+import Darwin
 #elseif canImport(Glibc)
-    import Glibc
+import Glibc
 #elseif canImport(Musl)
-    import Musl
+import Musl
 #endif
 
 public enum TailscaleError: Error {

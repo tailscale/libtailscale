@@ -4,7 +4,7 @@
 import Foundation
 
 #if canImport(CTailscale)
-    import CTailscale
+import CTailscale
 #endif
 
 #if canImport(Combine)
