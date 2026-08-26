@@ -20,6 +20,7 @@ $ make macos
 $ make ios
 $ make ios-sim
 $ make ios-fat
+$ make xcframework
 ```
 
 These recipes build different variants of TailscaleKit.framework into /swift/build/Build/Products.
@@ -28,9 +29,13 @@ Separate frameworks will be built for macOS and iOS and the iOS Simulator.  All 
 are built automatically.  Swift 6 is supported.
 
 The ios and ios-sim frameworks are purposefully separated.  The former is free of any simulator segments
-and is suitable for app-store submissions.   The latter is suitable for embedding when you 
+and is the one you ship.   The latter is suitable for embedding when you 
 wish to run on a simulator in dev though 'make ios-fat' will produce an xcframework bundle including
 both simulator and device frameworks for development.
+
+`make xcframework` produces a three-slice bundle (device, simulator and macOS)
+intended for distribution.  Prefer it over `ios-fat` if you are handing the
+framework to someone else — see "Distribution" below for why the two differ.
 
 The frameworks are not signed and must be signed when they are embedded.
 
@@ -49,6 +54,45 @@ If you're writing pure C, or C++, link these and use the generated tailscale.h h
 make c-archive builds for the local machine architecture/platform (arm64 macOS from a mac)
 
 Non-apple swift builds are not supported (yet) but should be possible with a little tweaking.
+
+## Distribution
+
+A framework that builds and links correctly can still be rejected at **upload**.
+These failures do not appear at build time; the first sign is a rejection from
+App Store Connect minutes after submission.  `make xcframework` handles them and
+`./script/validate-xcframework.sh` checks them:
+
+- **ITMS-91053 (Missing API declaration).**  Every embedded iOS framework needs a
+  `PrivacyInfo.xcprivacy`, even one that collects nothing — as TailscaleKit does.
+  `swift/PrivacyInfo.xcprivacy` is that manifest, and it is copied into both iOS
+  slices.
+- **Error 90238 (unsealed resource).**  macOS frameworks are versioned bundles.
+  The manifest has to live in `Versions/A/Resources` so the
+  `Versions/A/_CodeSignature` seal covers it; at the bundle root it is unsealed.
+  A stray `Info.plist` at the versioned-bundle root causes the same error.
+- **Symlinks in an iOS slice** are rejected outright.  macOS slices legitimately
+  contain them, so only iOS slices are checked.
+- **Simulator code in a slice that ships.**  The bundle deliberately contains a
+  simulator slice, and that is safe: Xcode embeds only the slice matching the
+  build destination, so an App Store archive carries `ios-arm64` alone.  The
+  familiar "no simulator binaries in a submission" rule is about fat frameworks,
+  where `lipo` merged device and simulator architectures into one binary — the
+  problem xcframeworks were introduced to solve.  What the validator checks is
+  that every slice is really what its name claims, by reading the build platform
+  of each architecture, so a mislabelled slice cannot ship simulator code.
+- **A vendor team identifier left in the signature** collides with the adopter's
+  own signing identity — see
+  [tailscale/tailscale#15802](https://github.com/tailscale/tailscale/issues/15802).
+  The frameworks are unsigned by design; your app signs them on embed.
+
+Validate before handing the bundle to anyone:
+
+```bash
+$ make xcframework
+$ ./script/validate-xcframework.sh
+```
+
+It exits non-zero and names the offending slice if any check fails.
 
 ## Tests
 
