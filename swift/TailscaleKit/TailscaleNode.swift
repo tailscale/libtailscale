@@ -128,7 +128,9 @@ public actor TailscaleNode {
         }
 
         logger?.log("Bringing Tailscale up :\(tailscale)")
-        let res = tailscale_up(tailscale)
+        // up() is locking pending successful login.  Run in a detached task so we
+        // don't block the actor.
+        let res = await Task.detached { tailscale_up(tailscale) }.value
 
         guard res == 0 else {
             throw TailscaleError.fromPosixErrCode(res, tailscale.getErrorMessage())
