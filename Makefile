@@ -11,7 +11,13 @@ export CGO_ENABLED=1
 # This should match the minimum target in the xCode project
 # The wrapper lib currently requires features available in
 # MacOS 15.0 (Sequoia)
-MACOS_TARGET := 15.0
+#
+# `?=` rather than `:=` so the environment can override it. With `:=`,
+# `MACOS_TARGET=14.0 make c-archive` is silently ignored — make reports success
+# and builds 15.0 anyway, because an environment variable does not override a
+# makefile assignment. Only `make MACOS_TARGET=14.0 c-archive` worked, which is
+# easy to get wrong and gives no signal when you do.
+MACOS_TARGET ?= 15.0
 
 # Set macOS-specific flags for darwin builds
 ifeq ($(GOOS),darwin)
