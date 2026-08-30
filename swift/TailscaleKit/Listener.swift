@@ -6,6 +6,12 @@ import Foundation
 
 /// A Listener is used to await incoming connections from another
 /// Tailnet node.
+// Gated so the rest of TailscaleKit can be built for older systems.
+// `state()` returns `any AsyncSequence<ListenerState, Never>`, whose `Failure`
+// associated type is iOS 18 / macOS 15 only, and that requirement propagates to
+// the whole framework even for clients that never listen for inbound
+// connections. Annotating the two listener types confines it to them.
+@available(iOS 18.0, macOS 15.0, tvOS 18.0, watchOS 11.0, *)
 public actor Listener {
     private var tailscale: TailscaleHandle 
     private var listener: TailscaleListener = 0
