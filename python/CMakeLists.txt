@@ -1,7 +1,7 @@
 # Copyright (c) Tailscale Inc & AUTHORS
 # SPDX-License-Identifier: BSD-3-Clause
 
-cmake_minimum_required(VERSION 3.4...3.18)
+cmake_minimum_required(VERSION 3.5...3.18)
 project(tailscale)
 
 add_subdirectory(pybind11)
