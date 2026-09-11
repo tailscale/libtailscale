@@ -182,6 +182,51 @@ final class TailscaleKitTests: XCTestCase {
             XCTFail(error.localizedDescription)
         }
     }
+
+    /// The bus watch's request timeout is the interval it may go WITHOUT data, not a budget for
+    /// the whole watch, so the default has to outlive an idle tailnet.  Asking for a short one
+    /// pins the plumbing: the timeout has to reach the request that MessageReader actually runs,
+    /// and land on the consumer as NSURLErrorTimedOut.  A test for the DEFAULT would have to
+    /// outsit 60s of silence, which is why the regression went unnoticed.
+    func testWatchIPNBusHonoursItsTimeoutInterval() async throws {
+        let config = mockConfig()
+        let logger = BlackholeLogger()
+
+        let ts1 = try TailscaleNode(config: config, logger: logger)
+        try await ts1.up()
+
+        let timedOut = expectation(description: "the bus watch timed out")
+        let consumer = TimeoutObservingConsumer {
+            let err = $0 as NSError
+            if err.domain == NSURLErrorDomain && err.code == NSURLErrorTimedOut {
+                timedOut.fulfill()
+            }
+        }
+
+        let api = LocalAPIClient(localNode: ts1, logger: logger)
+        let processor = try await api.watchIPNBus(mask: [.initialState, .noPrivateKeys],
+                                                  consumer: consumer,
+                                                  timeoutInterval: 2)
+
+        await fulfillment(of: [timedOut], timeout: 20.0)
+        processor.cancel()
+    }
+}
+
+/// Watches only for the bus's error callback.  The notifications themselves are beside the
+/// point here: the initial state lands immediately, and the test is about the silence after it.
+actor TimeoutObservingConsumer: MessageConsumer {
+    private let onError: @Sendable (any Error) -> Void
+
+    init(onError: @escaping @Sendable (any Error) -> Void) {
+        self.onError = onError
+    }
+
+    func notify(_ notify: Ipn.Notify) {}
+
+    func error(_ error: any Error) {
+        onError(error)
+    }
 }
 
 
