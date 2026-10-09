@@ -112,7 +112,7 @@ func runDERPAndSTUN(logf logger.Logf, ipAddress string) (derpMap *tailcfg.DERPMa
 	}
 
 	m := &tailcfg.DERPMap{
-		Regions: map[int]*tailcfg.DERPRegion{
+		Regions: map[tailcfg.DERPRegionID]*tailcfg.DERPRegion{
 			1: {
 				RegionID:   1,
 				RegionCode: "test",
