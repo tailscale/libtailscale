@@ -133,6 +133,157 @@ int close_conn() {
 	}
 	return 0;
 }
+
+tailscale sa, sb, sc;
+char* tmpsa = NULL;
+char* tmpsb = NULL;
+char* tmpsc = NULL;
+
+// ga_up starts a tsnet node with the shared control URL and state dir.
+int ga_up(tailscale s, char* dir) {
+	if (tailscale_set_control_url(s, control_url) != 0) {
+		return set_err(s, 'u');
+	}
+	if (tailscale_set_dir(s, dir) != 0) {
+		return set_err(s, 'v');
+	}
+	if (tailscale_set_logfd(s, -1) != 0) {
+		return set_err(s, 'w');
+	}
+	if (tailscale_up(s) != 0) {
+		return set_err(s, 'x');
+	}
+	return 0;
+}
+
+// ga_ip4 writes s's first (IPv4) tailnet address into buf as a
+// NUL-terminated string.
+int ga_ip4(tailscale s, char* buf, size_t buflen) {
+	int ret = tailscale_getips(s, buf, buflen);
+	if (ret != 0) {
+		return ret;
+	}
+	char* comma = strchr(buf, ',');
+	if (comma != NULL) {
+		*comma = '\0';
+	}
+	return 0;
+}
+
+// test_getremoteaddr exercises the accept path under fd-number reuse:
+// two client nodes alternate dialing a server node, each announcing
+// its own tailnet IP on the connection, and the server checks that
+// tailscale_getremoteaddr reports exactly the announced address for
+// every accepted connection.
+int test_getremoteaddr() {
+	int ret;
+	char msg[256];
+	char ipbuf[128];
+
+	if (err == NULL) {
+		err = calloc(errlen, 1);
+	}
+
+	sa = tailscale_new();
+	sb = tailscale_new();
+	sc = tailscale_new();
+	if ((ret = ga_up(sa, tmpsa)) != 0) return ret;
+	if ((ret = ga_up(sb, tmpsb)) != 0) return ret;
+	if ((ret = ga_up(sc, tmpsc)) != 0) return ret;
+
+	char serverip[64];
+	if ((ret = ga_ip4(sa, serverip, sizeof serverip)) != 0) {
+		return set_err(sa, 'd');
+	}
+	char* ipb;
+	char* ipc;
+	if ((ret = ga_ip4(sb, ipbuf, sizeof ipbuf)) != 0) {
+		return set_err(sb, 'e');
+	}
+	ipb = strdup(ipbuf);
+	if ((ret = ga_ip4(sc, ipbuf, sizeof ipbuf)) != 0) {
+		return set_err(sc, 'f');
+	}
+	ipc = strdup(ipbuf);
+
+	char serveraddr[80];
+	snprintf(serveraddr, sizeof serveraddr, "%s:8181", serverip);
+
+	tailscale_listener ln;
+	if ((ret = tailscale_listen(sa, "tcp", ":8181", &ln)) != 0) {
+		return set_err(sa, 'g');
+	}
+
+	for (int i = 0; i < 200; i++) {
+		tailscale client = (i % 2) ? sc : sb;
+		char* ip = (i % 2) ? ipc : ipb;
+
+		tailscale_conn w;
+		if ((ret = tailscale_dial(client, "tcp", serveraddr, &w)) != 0) {
+			msg[0] = '\0';
+			tailscale_errmsg(client, msg, sizeof msg - 1);
+			snprintf(err, errlen, "conn %d: dial: %s", i, msg);
+			return 1;
+		}
+
+		size_t iplen = strlen(ip);
+		if (write(w, ip, iplen) != (ssize_t)iplen) {
+			snprintf(err, errlen, "conn %d: short write: errno %d (%s)", i, errno, strerror(errno));
+			return 1;
+		}
+
+		tailscale_conn r;
+		if ((ret = tailscale_accept(ln, &r)) != 0) {
+			msg[0] = '\0';
+			tailscale_errmsg(sa, msg, sizeof msg - 1);
+			snprintf(err, errlen, "conn %d: accept: %s", i, msg);
+			return 1;
+		}
+
+		char got[64] = {0};
+		if ((ret = tailscale_getremoteaddr(ln, r, got, sizeof got)) != 0) {
+			msg[0] = '\0';
+			tailscale_errmsg(sa, msg, sizeof msg - 1);
+			snprintf(err, errlen, "conn %d: getremoteaddr: %d (%s)", i, ret, msg);
+			return 1;
+		}
+
+		char want[64] = {0};
+		size_t off = 0;
+		while (off < iplen) {
+			ssize_t n = read(r, want + off, iplen - off);
+			if (n <= 0) {
+				snprintf(err, errlen, "conn %d: short read: %zd, errno %d (%s)", i, n, errno, strerror(errno));
+				return 1;
+			}
+			off += n;
+		}
+
+		if (strcmp(got, want) != 0) {
+			snprintf(err, errlen, "conn %d: getremoteaddr returned %s, want %s", i, got, want);
+			return 1;
+		}
+
+		if (close(w) != 0 || close(r) != 0) {
+			snprintf(err, errlen, "conn %d: close: errno %d (%s)", i, errno, strerror(errno));
+			return 1;
+		}
+	}
+
+	if ((ret = close(ln)) != 0) {
+		snprintf(err, errlen, "close listener: errno %d (%s)", errno, strerror(errno));
+		return 1;
+	}
+
+	free(ipb);
+	free(ipc);
+
+	if (tailscale_close(sc) != 0 || tailscale_close(sb) != 0 || tailscale_close(sa) != 0) {
+		snprintf(err, errlen, "close nodes failed");
+		return 1;
+	}
+	return 0;
+}
 */
 import "C"
 import (
@@ -214,6 +365,42 @@ func RunTestConn(t *testing.T) {
 	}
 
 	if C.close_conn() != 0 {
+		t.Fatal(C.GoString(C.err))
+	}
+}
+
+// RunTestGetRemoteAddr runs the C-side test_getremoteaddr.
+func RunTestGetRemoteAddr(t *testing.T) {
+	// Corp#4520: don't use netns for tests.
+	netns.SetEnabled(false)
+	t.Cleanup(func() {
+		netns.SetEnabled(true)
+	})
+
+	derpLogf := logger.Discard
+	if *verboseDERP {
+		derpLogf = t.Logf
+	}
+	derpMap := integration.RunDERPAndSTUN(t, derpLogf, "127.0.0.1")
+	control := &testcontrol.Server{
+		DERPMap: derpMap,
+	}
+	control.HTTPTestServer = httptest.NewUnstartedServer(control)
+	control.HTTPTestServer.Start()
+	t.Cleanup(control.HTTPTestServer.Close)
+	t.Logf("testcontrol listening on %s", control.HTTPTestServer.URL)
+
+	C.control_url = C.CString(control.HTTPTestServer.URL)
+
+	tmp := t.TempDir()
+	for _, d := range []string{"ga", "gb", "gc"} {
+		os.MkdirAll(filepath.Join(tmp, d), 0755)
+	}
+	C.tmpsa = C.CString(filepath.Join(tmp, "ga"))
+	C.tmpsb = C.CString(filepath.Join(tmp, "gb"))
+	C.tmpsc = C.CString(filepath.Join(tmp, "gc"))
+
+	if C.test_getremoteaddr() != 0 {
 		t.Fatal(C.GoString(C.err))
 	}
 }
