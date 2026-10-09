@@ -59,6 +59,13 @@ func TestConn(t *testing.T) {
 	}
 }
 
+// TestGetRemoteAddr checks that tailscale_getremoteaddr reports the
+// right peer address for every accepted connection while fd numbers
+// are being reused across connections (tailscale/tailscale#18310).
+func TestGetRemoteAddr(t *testing.T) {
+	tsnetctest.RunTestGetRemoteAddr(t)
+}
+
 func TestExtractIP(t *testing.T) {
 	ipv4 := "1.23.33.4:12343"
 	ipv6 := "[1::2234::34fc::44]:56576"
