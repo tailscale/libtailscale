@@ -10,9 +10,11 @@ import "C"
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
+	"net/netip"
 	"os"
 	"regexp"
 	"strconv"
@@ -39,15 +41,41 @@ var servers struct {
 }
 
 type server struct {
-	s       *tsnet.Server
+	s      *tsnet.Server
+	ctx    context.Context
+	cancel context.CancelFunc
+	ops    sync.WaitGroup
+
+	// startOnce publishes the initialization result to operations. Close reads
+	// it only after ops.Wait: tsnet.Close must not overlap tsnet.Start, nor run
+	// on a server whose initialization failed.
+	startOnce sync.Once
+	startErr  error
+	started   bool
+
+	errMu   sync.Mutex
 	lastErr string
-	started bool
 }
 
-func getServer(sd C.int) *server {
+// acquireServer registers an operation while the handle is still in the map.
+// The caller must defer s.ops.Done until after its last resource access,
+// including error recording and output handling.
+func acquireServer(sd C.int) *server {
 	servers.mu.Lock()
 	defer servers.mu.Unlock()
-	return servers.m[sd]
+	s := servers.m[sd]
+	if s != nil {
+		s.ops.Add(1)
+	}
+	return s
+}
+
+func (s *server) start() error {
+	s.startOnce.Do(func() {
+		s.startErr = s.s.Start()
+		s.started = s.startErr == nil
+	})
+	return s.startErr
 }
 
 // listeners tracks all the tsnet_listener objects allocated via tsnet_listen.
@@ -82,6 +110,8 @@ type conn struct {
 }
 
 func (s *server) recErr(err error) C.int {
+	s.errMu.Lock()
+	defer s.errMu.Unlock()
 	if err == nil {
 		s.lastErr = ""
 		return 0
@@ -104,34 +134,33 @@ func TsnetNewServer() C.int {
 	}
 	sd := servers.next
 	servers.next++
-	s := &server{s: &tsnet.Server{}}
+	ctx, cancel := context.WithCancel(context.Background())
+	s := &server{s: &tsnet.Server{}, ctx: ctx, cancel: cancel}
 	servers.m[sd] = s
 	return (C.int)(sd)
 }
 
 //export TsnetStart
 func TsnetStart(sd C.int) C.int {
-	s := getServer(sd)
+	s := acquireServer(sd)
 	if s == nil {
 		return C.EBADF
 	}
-	err := s.s.Start()
-	if err == nil {
-		s.started = true
-	}
-	return s.recErr(err)
+	defer s.ops.Done()
+	return s.recErr(s.start())
 }
 
 //export TsnetUp
 func TsnetUp(sd C.int) C.int {
-	s := getServer(sd)
+	s := acquireServer(sd)
 	if s == nil {
 		return C.EBADF
 	}
-	_, err := s.s.Up(context.Background()) // cancellation is via TsnetClose
-	if err == nil {
-		s.started = true
+	defer s.ops.Done()
+	if err := s.start(); err != nil {
+		return s.recErr(fmt.Errorf("tsnet.Up: %w", err))
 	}
+	_, err := s.s.Up(s.ctx)
 	return s.recErr(err)
 }
 
@@ -148,10 +177,15 @@ func TsnetClose(sd C.int) C.int {
 		return C.EBADF
 	}
 
-	// TODO: cancel Up
+	// Deleting the handle under servers.mu prevents any further ops.Add.
+	// Cancel without holding either the registry lock or the initialization
+	// lock, then let all registered calls finish before destroying resources.
+	s.cancel()
+	s.ops.Wait()
+
 	// TODO: close related listeners / conns.
 	if !s.started {
-		// Server was never started, nothing to close.
+		// Start was never called or failed; tsnet cannot safely close either.
 		return 0
 	}
 	if err := s.s.Close(); err != nil {
@@ -170,9 +204,10 @@ func TsnetGetIps(sd C.int, buf *C.char, buflen C.size_t) C.int {
 		panic("errmsg passed buflen of 0")
 	}
 
-	servers.mu.Lock()
-	s := servers.m[sd]
-	servers.mu.Unlock()
+	s := acquireServer(sd)
+	if s != nil {
+		defer s.ops.Done()
+	}
 
 	out := unsafe.Slice((*byte)(unsafe.Pointer(buf)), buflen)
 
@@ -200,16 +235,19 @@ func TsnetErrmsg(sd C.int, buf *C.char, buflen C.size_t) C.int {
 		panic("errmsg passed buflen of 0")
 	}
 
-	servers.mu.Lock()
-	s := servers.m[sd]
-	servers.mu.Unlock()
+	s := acquireServer(sd)
+	if s != nil {
+		defer s.ops.Done()
+	}
 
 	out := unsafe.Slice((*byte)(unsafe.Pointer(buf)), buflen)
 	if s == nil {
 		out[0] = '\x00'
 		return C.EBADF
 	}
+	s.errMu.Lock()
 	n := copy(out, s.lastErr)
+	s.errMu.Unlock()
 	if n >= len(out) {
 		out[len(out)-1] = '\x00' // always NUL-terminate
 		return C.ERANGE
@@ -218,18 +256,62 @@ func TsnetErrmsg(sd C.int, buf *C.char, buflen C.size_t) C.int {
 	return 0
 }
 
+// validateListenArgs preserves tsnet.Listen's validation-before-Start behavior.
+// Invalid arguments must not consume startOnce or initialize a node. Keep these
+// checks aligned with tsnet's listen/resolveListenAddr when updating tsnet.
+func validateListenArgs(network, addr string) error {
+	switch network {
+	case "", "tcp", "tcp4", "tcp6", "udp", "udp4", "udp6":
+	default:
+		return errors.New("unsupported network type")
+	}
+	host, portStr, err := net.SplitHostPort(addr)
+	if err != nil {
+		return fmt.Errorf("tsnet: %w", err)
+	}
+	port, err := net.LookupPort(network, portStr)
+	if err != nil || port < 0 || port > 65535 {
+		// LookupPort returns an error on out of range values so the bounds
+		// checks on port should be unnecessary, but harmless. If they do
+		// match, worst case this error message says "invalid port: <nil>".
+		return fmt.Errorf("invalid port: %w", err)
+	}
+	if host == "" {
+		return nil
+	}
+
+	bindHostOrZero, err := netip.ParseAddr(host)
+	if err != nil {
+		return fmt.Errorf("invalid Listen addr %q; host part must be empty or IP literal", host)
+	}
+	if strings.HasSuffix(network, "4") && !bindHostOrZero.Is4() {
+		return fmt.Errorf("invalid non-IPv4 addr %v for network %q", host, network)
+	}
+	if strings.HasSuffix(network, "6") && !bindHostOrZero.Is6() {
+		return fmt.Errorf("invalid non-IPv6 addr %v for network %q", host, network)
+	}
+	return nil
+}
+
 //export TsnetListen
 func TsnetListen(sd C.int, network, addr *C.char, listenerOut *C.int) C.int {
-	s := getServer(sd)
+	s := acquireServer(sd)
 	if s == nil {
 		return C.EBADF
 	}
+	defer s.ops.Done()
+	networkStr, addrStr := C.GoString(network), C.GoString(addr)
+	if err := validateListenArgs(networkStr, addrStr); err != nil {
+		return s.recErr(err)
+	}
+	if err := s.start(); err != nil {
+		return s.recErr(err)
+	}
 
-	ln, err := s.s.Listen(C.GoString(network), C.GoString(addr))
+	ln, err := s.s.Listen(networkStr, addrStr)
 	if err != nil {
 		return s.recErr(err)
 	}
-	s.started = true
 
 	// The tailscale_listener we return to C is one side of a socketpair(2).
 	// We do this so we can proactively call ln.Accept in a goroutine and
@@ -450,15 +532,18 @@ func extractIP(ipWithPort string) string {
 
 //export TsnetDial
 func TsnetDial(sd C.int, network, addr *C.char, connOut *C.int) C.int {
-	s := getServer(sd)
+	s := acquireServer(sd)
 	if s == nil {
 		return C.EBADF
 	}
-	netConn, err := s.s.Dial(context.Background(), C.GoString(network), C.GoString(addr))
+	defer s.ops.Done()
+	if err := s.start(); err != nil {
+		return s.recErr(err)
+	}
+	netConn, err := s.s.Dial(s.ctx, C.GoString(network), C.GoString(addr))
 	if err != nil {
 		return s.recErr(err)
 	}
-	s.started = true
 	if err := newConn(s, netConn, connOut); err != nil {
 		return s.recErr(err)
 	}
@@ -467,50 +552,55 @@ func TsnetDial(sd C.int, network, addr *C.char, connOut *C.int) C.int {
 
 //export TsnetSetDir
 func TsnetSetDir(sd C.int, str *C.char) C.int {
-	s := getServer(sd)
+	s := acquireServer(sd)
 	if s == nil {
 		return C.EBADF
 	}
+	defer s.ops.Done()
 	s.s.Dir = C.GoString(str)
 	return 0
 }
 
 //export TsnetSetHostname
 func TsnetSetHostname(sd C.int, str *C.char) C.int {
-	s := getServer(sd)
+	s := acquireServer(sd)
 	if s == nil {
 		return C.EBADF
 	}
+	defer s.ops.Done()
 	s.s.Hostname = C.GoString(str)
 	return 0
 }
 
 //export TsnetSetAuthKey
 func TsnetSetAuthKey(sd C.int, str *C.char) C.int {
-	s := getServer(sd)
+	s := acquireServer(sd)
 	if s == nil {
 		return C.EBADF
 	}
+	defer s.ops.Done()
 	s.s.AuthKey = C.GoString(str)
 	return 0
 }
 
 //export TsnetSetControlURL
 func TsnetSetControlURL(sd C.int, str *C.char) C.int {
-	s := getServer(sd)
+	s := acquireServer(sd)
 	if s == nil {
 		return C.EBADF
 	}
+	defer s.ops.Done()
 	s.s.ControlURL = C.GoString(str)
 	return 0
 }
 
 //export TsnetSetEphemeral
 func TsnetSetEphemeral(sd C.int, e int) C.int {
-	s := getServer(sd)
+	s := acquireServer(sd)
 	if s == nil {
 		return C.EBADF
 	}
+	defer s.ops.Done()
 	if e == 0 {
 		s.s.Ephemeral = false
 	} else {
@@ -521,10 +611,11 @@ func TsnetSetEphemeral(sd C.int, e int) C.int {
 
 //export TsnetSetLogFD
 func TsnetSetLogFD(sd, fd C.int) C.int {
-	s := getServer(sd)
+	s := acquireServer(sd)
 	if s == nil {
 		return C.EBADF
 	}
+	defer s.ops.Done()
 	if fd == -1 {
 		s.s.Logf = logger.Discard
 		return 0
@@ -555,9 +646,13 @@ func TsnetLoopback(sd C.int, addrOut *C.char, addrLen C.size_t, proxyOut *C.char
 	*localOut = '\x00'
 	*proxyOut = '\x00'
 
-	s := getServer(sd)
+	s := acquireServer(sd)
 	if s == nil {
 		return C.EBADF
+	}
+	defer s.ops.Done()
+	if err := s.start(); err != nil {
+		return s.recErr(err)
 	}
 	addr, proxyCred, localAPICred, err := s.s.Loopback()
 	if err != nil {
@@ -596,9 +691,13 @@ func TsnetStatusJSON(sd C.int, jsonOut **C.char) C.int {
 		panic("status_json passed nil json_out")
 	}
 	*jsonOut = nil
-	s := getServer(sd)
+	s := acquireServer(sd)
 	if s == nil {
 		return C.EBADF
+	}
+	defer s.ops.Done()
+	if err := s.start(); err != nil {
+		return s.recErr(err)
 	}
 	// LocalClient rides tsnet's in-memory LocalAPI listener — unlike
 	// Loopback()'s TCP listener it cannot be reclaimed by the OS while
@@ -608,7 +707,7 @@ func TsnetStatusJSON(sd C.int, jsonOut **C.char) C.int {
 	if err != nil {
 		return s.recErr(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(s.ctx, 10*time.Second)
 	defer cancel()
 	st, err := lc.Status(ctx)
 	if err != nil {
@@ -624,12 +723,16 @@ func TsnetStatusJSON(sd C.int, jsonOut **C.char) C.int {
 
 //export TsnetEnableFunnelToLocalhostPlaintextHttp1
 func TsnetEnableFunnelToLocalhostPlaintextHttp1(sd C.int, localhostPort C.int) C.int {
-	s := getServer(sd)
+	s := acquireServer(sd)
 	if s == nil {
 		return C.EBADF
 	}
+	defer s.ops.Done()
+	if err := s.start(); err != nil {
+		return s.recErr(err)
+	}
 
-	ctx := context.Background()
+	ctx := s.ctx
 	lc, err := s.s.LocalClient()
 	if err != nil {
 		return s.recErr(err)
