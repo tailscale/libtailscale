@@ -89,10 +89,9 @@ final class TailscaleKitTests: XCTestCase {
                 let inbound = try await listener.accept()
                 await listener.close()
 
-                // We can trust the backend here but this is slightly flaky since remoteAddress can be
-                // nil for legitimate reasons.
-                // let inboundIP = await inbound.remoteAddress
-                // XCTAssertEqual(inboundIP, writerAddr)
+                let inboundIP = await inbound.remoteAddress
+                let writerAddr = netType == .v4 ? ts2_addr.ip4 : ts2_addr.ip6.map { "[\($0)]" }
+                XCTAssertEqual(inboundIP, writerAddr)
 
                 let got = try await inbound.receiveMessage(timeout: 2)
                 print("got \(got)")

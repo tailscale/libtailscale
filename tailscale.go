@@ -8,6 +8,7 @@ package main
 import "C"
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -61,13 +62,16 @@ type listener struct {
 	ln net.Listener
 	fd int // go side fd of socketpair sent to C
 	mu sync.Mutex
-	m  map[C.int]net.Addr
+	// m maps the fd number C holds for an accepted connection (not our
+	// sender-side number; recvmsg installs a new one) to its remote IP.
+	m map[C.int]string
 }
 
-type strAddr string
-
-func (s strAddr) Network() string { return "" }
-func (s strAddr) String() string  { return string(s) }
+// listenAddrLen is the size of the fixed-size, NUL-padded record that
+// carries each accepted connection's remote IP over the listener
+// socketpair. Fixed size so TsnetAccept frames the stream with
+// exact-size reads; 45 bytes covers the longest textual IP.
+const listenAddrLen = 64
 
 // conns tracks all the pipe(2)s allocated via tsnet_dial.
 var conns struct {
@@ -247,7 +251,7 @@ func TsnetListen(sd C.int, network, addr *C.char, listenerOut *C.int) C.int {
 	if listeners.m == nil {
 		listeners.m = map[C.int]*listener{}
 	}
-	listener := &listener{s: s, ln: ln, fd: sp, m: map[C.int]net.Addr{}}
+	listener := &listener{s: s, ln: ln, fd: sp, m: map[C.int]string{}}
 	listeners.m[fdC] = listener
 	listeners.mu.Unlock()
 
@@ -289,17 +293,30 @@ func TsnetListen(sd C.int, network, addr *C.char, listenerOut *C.int) C.int {
 				netConn.Close()
 				continue
 			}
-			addrBytes := []byte(netConn.RemoteAddr().String())
+			ip := extractIP(netConn.RemoteAddr().String())
+			if len(ip) >= listenAddrLen {
+				if s.s.Logf != nil {
+					s.s.Logf("libtailscale.accept: remote address %q does not fit in a %d-byte record", ip, listenAddrLen)
+				}
+				netConn.Close()
+				syscall.Close(int(connFd))
+				continue
+			}
+			var addrRec [listenAddrLen]byte
+			copy(addrRec[:], ip)
+
 			rights := syscall.UnixRights(int(connFd))
-			err = syscall.Sendmsg(sp, addrBytes, rights, nil, 0)
+			err = syscall.Sendmsg(sp, addrRec[:], rights, nil, 0)
 			if err != nil {
+				// a failed sendmsg delivered nothing (sp being closed is
+				// handled by the read goroutine above)
 				if s.s.Logf != nil {
 					s.s.Logf("libtailscale.accept: sendmsg failed: %v", err)
 				}
 				netConn.Close()
-				// fallthrough to close connFd, then continue Accept()ing
 			}
-			syscall.Close(int(connFd)) // sender's copy; receiver gets its own fd from recvmsg
+
+			syscall.Close(int(connFd)) // now owned by recvmsg
 		}
 	}()
 
@@ -317,14 +334,42 @@ func TsnetAccept(listenerFd C.int, connOut *C.int) C.int {
 		return C.EBADF
 	}
 
-	addrBuf := make([]byte, 256)
-	oobBuf := make([]byte, unix.CmsgLen(int(unsafe.Sizeof((C.int)(0)))))
-	n, oobn, _, _, err := syscall.Recvmsg(int(listenerFd), addrBuf, oobBuf, 0)
-	if err != nil {
-		return ln.s.recErr(err)
+	// One record per connection: the fd via SCM_RIGHTS plus its remote
+	// IP. The fd parsed below is the number the kernel installed, i.e.
+	// the number C will hold.
+	//
+	// The socketpair is a stream socket, so records are framed here:
+	// each read asks for the remaining bytes of the head record, with
+	// MSG_WAITALL. The FIFO never serves a later record's bytes first,
+	// so each accept consumes exactly one record, even concurrently or
+	// after EINTR.
+	data := make([]byte, listenAddrLen)
+	cbuf := make([]byte, unix.CmsgLen(int(unsafe.Sizeof((C.int)(0)))))
+	var n, oobn int
+	for n < len(data) {
+		buf := data[n:]
+		if n > 0 {
+			// the cmsg rode with the record's first byte; only the tail remains
+			cbuf = nil
+		}
+		nn, on, _, _, err := syscall.Recvmsg(int(listenerFd), buf, cbuf, syscall.MSG_WAITALL)
+		n += nn
+		if nn > 0 {
+			oobn = on
+		}
+		if err == syscall.EINTR {
+			continue // partial bytes stay record-aligned, keep draining
+		}
+		if err != nil {
+			return ln.s.recErr(err)
+		}
+		if nn == 0 {
+			// EOF mid-record: the listener was closed on the C side.
+			return ln.s.recErr(fmt.Errorf("libtailscale: listener closed mid-record: got %d of %d bytes", n, len(data)))
+		}
 	}
 
-	scms, err := syscall.ParseSocketControlMessage(oobBuf[:oobn])
+	scms, err := syscall.ParseSocketControlMessage(cbuf[:oobn])
 	if err != nil {
 		return ln.s.recErr(err)
 	}
@@ -338,14 +383,18 @@ func TsnetAccept(listenerFd C.int, connOut *C.int) C.int {
 	if len(fds) != 1 {
 		return ln.s.recErr(fmt.Errorf("libtailscale: got %d FDs, want 1", len(fds)))
 	}
-	fd := (C.int)(fds[0])
-	*connOut = fd
+	fd := C.int(fds[0])
 
-	if n > 0 {
-		ln.mu.Lock()
-		ln.m[fd] = strAddr(string(addrBuf[:n]))
-		ln.mu.Unlock()
+	// the entry must exist before C can learn this fd number
+	addrLen := bytes.IndexByte(data, 0)
+	if addrLen < 0 {
+		addrLen = listenAddrLen
 	}
+	ln.mu.Lock()
+	ln.m[fd] = string(data[:addrLen])
+	ln.mu.Unlock()
+
+	*connOut = fd
 
 	return 0
 }
@@ -382,8 +431,12 @@ func newConn(s *server, netConn net.Conn, connOut *C.int) error {
 		r.Close()
 		netConn.Close()
 	}
+	// the Shutdowns below must precede connCleanup: r.Fd() after Close
+	// can return a reused fd number. Wait for both copy directions.
+	var copies sync.WaitGroup
+	copies.Add(2)
 	go func() {
-		defer connCleanup()
+		defer copies.Done()
 		var b [1 << 16]byte
 		io.CopyBuffer(r, netConn, b[:])
 		syscall.Shutdown(int(r.Fd()), syscall.SHUT_WR)
@@ -392,13 +445,17 @@ func newConn(s *server, netConn net.Conn, connOut *C.int) error {
 		}
 	}()
 	go func() {
-		defer connCleanup()
+		defer copies.Done()
 		var b [1 << 16]byte
 		io.CopyBuffer(netConn, r, b[:])
 		syscall.Shutdown(int(r.Fd()), syscall.SHUT_RD)
 		if cw, ok := netConn.(interface{ CloseWrite() error }); ok {
 			cw.CloseWrite()
 		}
+	}()
+	go func() {
+		copies.Wait()
+		connCleanup()
 	}()
 
 	*connOut = fdC
@@ -424,13 +481,13 @@ func TsnetGetRemoteAddr(listener C.int, conn C.int, buf *C.char, buflen C.size_t
 
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	addr, ok := l.m[conn]
+	ip, ok := l.m[conn]
 	if !ok {
+		// set errmsg too: EBADF with an empty message is not debuggable
+		l.s.lastErr = fmt.Sprintf("libtailscale: getremoteaddr: no remote address recorded for conn %d on listener %d", conn, listener)
 		out[0] = '\x00'
 		return C.EBADF
 	}
-
-	ip := extractIP(addr.String())
 
 	n := copy(out, ip)
 	if n >= len(out) {
