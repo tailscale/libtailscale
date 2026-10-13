@@ -51,3 +51,13 @@ end
 task test: :compile
 
 task default: :test
+
+# test:signals runs only the signal-safety tests. They are self-contained
+# (no test control server needed) and can be run standalone, but depend on
+# the compiled library like the other tests.
+Rake::TestTask.new("test:signals") do |t|
+  t.libs << "test"
+  t.libs << "lib"
+  t.test_files = FileList["test/**/test_signal_safety.rb"]
+end
+task "test:signals" => :compile

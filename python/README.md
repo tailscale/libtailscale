@@ -31,9 +31,25 @@ Build a distributable wheel:
 
 ## Usage
 
-The node will need to be authorized in order to function. Set an auth key via
+The node will need to be authorized in order for it to function. Set an auth key via
 the `$TS_AUTHKEY` environment variable, with `TSNet.set_authkey`, or watch the log
 stream and respond to the printed authorization URL.
+
+`TSNet.up()` blocks until the node is usable, but stays responsive to interrupts
+while blocked: a `KeyboardInterrupt` (Ctrl+C) cancels the underlying Go call and
+re-raises, and `up(timeout_ms=...)` bounds the wait:
+
+    t = TSNet()
+    t.up(timeout_ms=30_000)  # raises TSNetException after 30 seconds
+
+A `up()` that was interrupted or timed out may leave the server partially
+started; create a new `TSNet` rather than retrying on the same one.
+
+The package loads a Go runtime as a native extension, which normally takes over
+some process-global signal handling. libtailscale isolates this while it loads,
+and the package completes it at import time, so Python's own signal handling
+(`signal.signal`, `KeyboardInterrupt`) keeps working unchanged. See
+[SIGNALS.md](../SIGNALS.md) in the libtailscale repository for details.
 
 ## Contributing
 
