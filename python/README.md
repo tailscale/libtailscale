@@ -27,7 +27,7 @@ Run example echo server:
 Build a distributable wheel:
 
     $ make wheel
-    => tailscale-0.0.1-cp310-cp310-linux_x86_64.whl
+    => tailscale-0.2.0-cp310-cp310-linux_x86_64.whl
 
 ## Usage
 
