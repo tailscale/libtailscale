@@ -29,7 +29,7 @@ libtailscale.pc:
 	echo "" >> libtailscale.pc
 	echo "Name: libtailscale" >> libtailscale.pc
 	echo "Description: Tailscale library" >> libtailscale.pc
-	echo "Version: 0.0.1" >> libtailscale.pc
+	echo "Version: 0.2.0" >> libtailscale.pc
 	echo "Libs: -L\$${libdir} -ltailscale" >> libtailscale.pc
 	echo "Cflags: -I\$${includedir}" >> libtailscale.pc
 
