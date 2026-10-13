@@ -30,7 +30,19 @@ typedef int tailscale;
 // No network connection is initialized until tailscale_start is called.
 extern tailscale tailscale_new();
 
-
+// tailscale_signal_restore completes the host-signal isolation that the
+// library began in its constructor when it was loaded: it restores the
+// signal mask of the thread that loaded the library, and re-repairs the
+// flags of the host's signal handlers (the Go runtime adds SA_ONSTACK to
+// them at load; the library removes it again before the load returns).
+//
+// It is called automatically by the first tailscale_new() (or Go-side
+// TsnetNewServer()) call, so most embedders never need it. Embedders that
+// dlopen the library and want their signals (e.g. SIGINT) handled normally
+// before creating any server should call it once from the thread that
+// loaded the library, right after the load. Calling it from another
+// thread, or repeatedly, is harmless. See SIGNALS.md.
+extern void tailscale_signal_restore();
 
 // tailscale_start connects the server to the tailnet.
 //

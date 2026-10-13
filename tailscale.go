@@ -5,6 +5,9 @@
 package main
 
 //#include "errno.h"
+//
+//void ts_signal_flags_restore(void);
+//void tailscale_signal_restore(void);
 import "C"
 
 import (
@@ -31,6 +34,15 @@ import (
 )
 
 func main() {}
+
+// The Go runtime's signal setup (initsig, run during library load before
+// package init) adds SA_ONSTACK to the flags of every caught host signal
+// handler, changing where those handlers run in memory. Undo that,
+// restoring the exact host dispositions snapshotted by the constructor
+// in tailscale.c before the Go runtime initialized. See SIGNALS.md.
+func init() {
+	C.ts_signal_flags_restore()
+}
 
 // servers tracks all the allocated *tsnet.Server objects.
 var servers struct {
@@ -169,6 +181,12 @@ func (s *server) recErr(err error) C.int {
 
 //export TsnetNewServer
 func TsnetNewServer() C.int {
+	// First call for (almost) every embedder (directly or via
+	// tailscale_new): complete the signal-state isolation started by the
+	// library constructor by restoring the loading thread's signal mask.
+	// No-op once done. See SIGNALS.md.
+	C.tailscale_signal_restore()
+
 	servers.mu.Lock()
 	defer servers.mu.Unlock()
 
