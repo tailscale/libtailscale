@@ -84,3 +84,17 @@ func TestExtractIP(t *testing.T) {
 		t.Errorf("ipv6 port stripping failed %s != %s", got6, want6)
 	}
 }
+
+func TestUpTimeout(t *testing.T) {
+	// See tsnetctest: cgo is not allowed in test files, so the
+	// cancellation tests exercise the C API from that package.
+	tsnetctest.RunTestUpTimeout(t)
+}
+
+func TestUpCancel(t *testing.T) {
+	tsnetctest.RunTestUpCancel(t)
+}
+
+func TestCloseCancelsUp(t *testing.T) {
+	tsnetctest.RunTestCloseCancelsUp(t)
+}

@@ -30,6 +30,8 @@ typedef int tailscale;
 // No network connection is initialized until tailscale_start is called.
 extern tailscale tailscale_new();
 
+
+
 // tailscale_start connects the server to the tailnet.
 //
 // Calling this function is optional as it will be called by the first use
@@ -42,10 +44,35 @@ extern int tailscale_start(tailscale sd);
 
 // tailscale_up connects the server to the tailnet and waits for it to be usable.
 //
-// To cancel an in-progress call to tailscale_up, use tailscale_close.
+// This blocks, possibly indefinitely (e.g. until an interactive login is
+// completed). To cancel an in-progress call use tailscale_cancel, or
+// tailscale_close to also shut the server down. To bound the wait, use
+// tailscale_up_timeout.
 //
 // Returns zero on success or -1 on error, call tailscale_errmsg for details.
 extern int tailscale_up(tailscale sd);
+
+// tailscale_up_timeout is tailscale_up with a deadline. It blocks at most
+// timeout_ms milliseconds; timeout_ms <= 0 means no deadline (like
+// tailscale_up). It is also cancellable with tailscale_cancel.
+//
+// Returns zero on success or -1 on error, call tailscale_errmsg for details.
+extern int tailscale_up_timeout(tailscale sd, long long timeout_ms);
+
+// tailscale_cancel interrupts the most recent pending tailscale_up or
+// tailscale_dial on sd, making it return a context-canceled error.
+//
+// This is how embeddings can keep blocking calls responsive to host
+// interrupts such as Ctrl+C: run the call on a helper thread and call
+// tailscale_cancel when the host wants to interrupt it.
+//
+// Canceling an already-completed operation is a no-op.
+//
+// Returns:
+// 	0     - success (a pending operation was found and canceled)
+// 	ENOENT - no pending operation to cancel
+// 	EBADF  - sd is not a valid tailscale
+extern int tailscale_cancel(tailscale sd);
 
 // tailscale_close shuts down the server.
 //
@@ -106,6 +133,13 @@ extern int tailscale_getips(tailscale sd, char* buf, size_t buflen);
 //
 // Returns zero on success or -1 on error, call tailscale_errmsg for details.
 extern int tailscale_dial(tailscale sd, const char* network, const char* addr, tailscale_conn* conn_out);
+
+// tailscale_dial_timeout is tailscale_dial with a deadline. It blocks at
+// most timeout_ms milliseconds; timeout_ms <= 0 means no deadline (like
+// tailscale_dial). It is also cancellable with tailscale_cancel.
+//
+// Returns zero on success or -1 on error, call tailscale_errmsg for details.
+extern int tailscale_dial_timeout(tailscale sd, const char* network, const char* addr, long long timeout_ms, tailscale_conn* conn_out);
 
 // A tailscale_listener is a socket on the tailnet listening for connections.
 //

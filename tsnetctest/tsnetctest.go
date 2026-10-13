@@ -284,18 +284,59 @@ int test_getremoteaddr() {
 	}
 	return 0;
 }
+
+// up_cancel_* test helpers: a server pointed at an unreachable control
+// URL, so that tailscale_up blocks indefinitely (until canceled or timed
+// out) without needing testcontrol.
+int up_cancel_sd = 0;
+
+int up_cancel_setup(const char* dir) {
+	up_cancel_sd = tailscale_new();
+	if (up_cancel_sd < 0) return 1;
+	if (tailscale_set_control_url(up_cancel_sd, "http://127.0.0.1:1") != 0) return 2;
+	if (tailscale_set_dir(up_cancel_sd, dir) != 0) return 3;
+	if (tailscale_set_hostname(up_cancel_sd, "up-cancel-test") != 0) return 4;
+	if (tailscale_set_ephemeral(up_cancel_sd, 1) != 0) return 5;
+	if (tailscale_set_logfd(up_cancel_sd, -1) != 0) return 6;
+	return 0;
+}
+
+int up_cancel_start() {
+	return tailscale_up(up_cancel_sd);
+}
+
+int up_cancel_timeout(long long ms) {
+	return tailscale_up_timeout(up_cancel_sd, ms);
+}
+
+// up_cancel_poll returns 0 once a pending up was found and canceled, or
+// ENOENT if there is nothing pending yet. Lets tests poll for the up to
+// have started without a TOCTOU race.
+int up_cancel_poll() {
+	return tailscale_cancel(up_cancel_sd);
+}
+
+int up_cancel_close() {
+	return tailscale_close(up_cancel_sd);
+}
+
+int up_cancel_errmsg(char* buf, size_t len) {
+	return tailscale_errmsg(up_cancel_sd, buf, len);}
 */
 import "C"
 import (
 	"context"
 	"flag"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+	"unsafe"
 
 	"tailscale.com/net/netns"
 	"tailscale.com/tstest/integration"
@@ -402,5 +443,126 @@ func RunTestGetRemoteAddr(t *testing.T) {
 
 	if C.test_getremoteaddr() != 0 {
 		t.Fatal(C.GoString(C.err))
+	}
+}
+
+// upCancelErrmsg fetches the last error message for the up_cancel test
+// server as a Go string.
+func upCancelErrmsg() string {
+	buf := make([]byte, 512)
+	if rv := C.up_cancel_errmsg((*C.char)(unsafe.Pointer(&buf[0])), C.size_t(len(buf))); rv != 0 {
+		return fmt.Sprintf("errmsg failed: %d", rv)
+	}
+	return C.GoString((*C.char)(unsafe.Pointer(&buf[0])))
+}
+
+func upCancelSetup(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	if rv := C.up_cancel_setup(C.CString(dir)); rv != 0 {
+		t.Fatalf("up_cancel_setup failed with setup code %d", rv)
+	}
+}
+
+// RunTestUpTimeout tests that tailscale_up_timeout returns promptly with
+// a deadline error, and that canceling after completion is a no-op.
+func RunTestUpTimeout(t *testing.T) {
+	upCancelSetup(t)
+
+	start := time.Now()
+	if rv := C.up_cancel_timeout(500); rv != -1 {
+		t.Fatalf("tailscale_up_timeout = %d, want -1", rv)
+	}
+	if d := time.Since(start); d > 5*time.Second {
+		t.Errorf("tailscale_up_timeout took %v; want it to respect the deadline", d)
+	}
+	if msg := upCancelErrmsg(); !strings.Contains(msg, "context deadline exceeded") {
+		t.Errorf("errmsg = %q; want context deadline exceeded", msg)
+	}
+
+	// After the operation completed, canceling is a no-op (ENOENT).
+	if rv := C.up_cancel_poll(); rv != C.ENOENT {
+		t.Errorf("tailscale_cancel after completed up = %d, want ENOENT", rv)
+	}
+
+	if rv := C.up_cancel_close(); rv != 0 {
+		t.Errorf("tailscale_close = %d, want 0", rv)
+	}
+}
+
+// RunTestUpCancel tests that tailscale_cancel interrupts a pending
+// tailscale_up, making it return promptly with a canceled error.
+func RunTestUpCancel(t *testing.T) {
+	upCancelSetup(t)
+
+	done := make(chan int32, 1)
+	go func() {
+		done <- int32(C.up_cancel_start())
+	}()
+
+	// Poll until the up has registered itself as a cancelable operation;
+	// ENOENT means it has not started yet.
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		rv := C.up_cancel_poll()
+		if rv == 0 {
+			break
+		}
+		if rv != C.ENOENT {
+			t.Fatalf("tailscale_cancel = %d, want 0 or ENOENT", rv)
+		}
+		select {
+		case upRv := <-done:
+			t.Fatalf("up returned %d before it could be canceled", upRv)
+		default:
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("up never registered a pending operation")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	select {
+	case rv := <-done:
+		if rv != -1 {
+			t.Errorf("canceled tailscale_up = %d, want -1", rv)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("tailscale_up did not return after tailscale_cancel")
+	}
+	if msg := upCancelErrmsg(); !strings.Contains(msg, "context canceled") {
+		t.Errorf("errmsg = %q; want context canceled", msg)
+	}
+
+	if rv := C.up_cancel_close(); rv != 0 {
+		t.Errorf("tailscale_close = %d, want 0", rv)
+	}
+}
+
+// RunTestCloseCancelsUp tests that tailscale_close cancels a pending
+// tailscale_up instead of leaving it blocked forever.
+func RunTestCloseCancelsUp(t *testing.T) {
+	upCancelSetup(t)
+
+	done := make(chan int32, 1)
+	go func() {
+		done <- int32(C.up_cancel_start())
+	}()
+
+	// Give the up a moment to start, then close the server out from
+	// under it. Even if close lands before the up registers, the closed
+	// backend makes the up return anyway.
+	time.Sleep(500 * time.Millisecond)
+	if rv := C.up_cancel_close(); rv != 0 {
+		t.Errorf("tailscale_close during pending up = %d, want 0", rv)
+	}
+
+	select {
+	case rv := <-done:
+		if rv != -1 {
+			t.Errorf("tailscale_up after close = %d, want -1", rv)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("tailscale_up did not return after tailscale_close")
 	}
 }

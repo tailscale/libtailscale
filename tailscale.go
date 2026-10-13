@@ -43,6 +43,79 @@ type server struct {
 	s       *tsnet.Server
 	lastErr string
 	started bool
+
+	// mu guards the pending-operation cancel slots below.
+	mu         sync.Mutex
+	upCancel   *pendingOp // cancels a pending TsnetUp/TsnetUpTimeout
+	dialCancel *pendingOp // cancels a pending TsnetDial/TsnetDialTimeout
+}
+
+// pendingOp tracks one blocking up or dial operation so that it can be
+// canceled with TsnetCancel (or by TsnetClose, so a close does not block on a
+// pending up that would otherwise never finish).
+type pendingOp struct {
+	cancel context.CancelFunc
+}
+
+// beginOp registers a cancelable context for a blocking up or dial call and
+// returns it along with a token to pass to endOp. timeoutMs <= 0 means no
+// deadline. Only the most recent pending operation of each kind is
+// cancellable; earlier pending operations keep running but can no longer be
+// targeted individually.
+func (s *server) beginOp(up bool, timeoutMs C.longlong) (context.Context, *pendingOp) {
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if timeoutMs > 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), time.Duration(timeoutMs)*time.Millisecond)
+	} else {
+		ctx, cancel = context.WithCancel(context.Background())
+	}
+	pc := &pendingOp{cancel: cancel}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if up {
+		s.upCancel = pc
+	} else {
+		s.dialCancel = pc
+	}
+	return ctx, pc
+}
+
+// endOp unregisters pc if it is still the pending operation and releases
+// its context resources. Safe to call when the operation has already been
+// canceled.
+func (s *server) endOp(up bool, pc *pendingOp) {
+	s.mu.Lock()
+	if up {
+		if s.upCancel == pc {
+			s.upCancel = nil
+		}
+	} else {
+		if s.dialCancel == pc {
+			s.dialCancel = nil
+		}
+	}
+	s.mu.Unlock()
+	pc.cancel()
+}
+
+// cancelOps cancels any pending blocking up or dial operations and reports
+// whether there was anything to cancel.
+func (s *server) cancelOps() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.upCancel == nil && s.dialCancel == nil {
+		return false
+	}
+	if s.upCancel != nil {
+		s.upCancel.cancel()
+		s.upCancel = nil
+	}
+	if s.dialCancel != nil {
+		s.dialCancel.cancel()
+		s.dialCancel = nil
+	}
+	return true
 }
 
 func getServer(sd C.int) *server {
@@ -126,17 +199,52 @@ func TsnetStart(sd C.int) C.int {
 	return s.recErr(err)
 }
 
+// Up blocks until the server is up and usable. Unlike TsnetUpTimeout, it has
+// no deadline, but it is still cancellable with TsnetCancel.
+//
 //export TsnetUp
 func TsnetUp(sd C.int) C.int {
+	return up(sd, -1)
+}
+
+// UpTimeout is TsnetUp with a deadline: it blocks until the server is up and
+// usable, or timeoutMs milliseconds have elapsed. timeoutMs <= 0 means no
+// deadline. It is also cancellable with TsnetCancel.
+//
+//export TsnetUpTimeout
+func TsnetUpTimeout(sd C.int, timeoutMs C.longlong) C.int {
+	return up(sd, timeoutMs)
+}
+
+func up(sd C.int, timeoutMs C.longlong) C.int {
 	s := getServer(sd)
 	if s == nil {
 		return C.EBADF
 	}
-	_, err := s.s.Up(context.Background()) // cancellation is via TsnetClose
+	// Cancellation is via TsnetCancel or the timeout.
+	ctx, pc := s.beginOp(true, timeoutMs)
+	defer s.endOp(true, pc)
+	_, err := s.s.Up(ctx)
 	if err == nil {
 		s.started = true
 	}
 	return s.recErr(err)
+}
+
+// Cancel interrupts the most recent pending TsnetUp/TsnetUpTimeout and
+// TsnetDial/TsnetDialTimeout on the server, making them return a
+// context-canceled error. Canceling completed operations is a no-op.
+//
+//export TsnetCancel
+func TsnetCancel(sd C.int) C.int {
+	s := getServer(sd)
+	if s == nil {
+		return C.EBADF
+	}
+	if !s.cancelOps() {
+		return C.ENOENT
+	}
+	return 0
 }
 
 //export TsnetClose
@@ -152,7 +260,11 @@ func TsnetClose(sd C.int) C.int {
 		return C.EBADF
 	}
 
-	// TODO: cancel Up
+	// Cancel any pending up/dial so they return promptly instead of
+	// relying on tsnet.Close to unblock them (which, without an authkey,
+	// would be never).
+	s.cancelOps()
+
 	// TODO: close related listeners / conns.
 	if !s.started {
 		// Server was never started, nothing to close.
@@ -505,13 +617,33 @@ func extractIP(ipWithPort string) string {
 	return match
 }
 
+// Dial blocks until the connection is established. Unlike
+// TsnetDialTimeout, it has no deadline, but it is still cancellable with
+// TsnetCancel.
+//
 //export TsnetDial
 func TsnetDial(sd C.int, network, addr *C.char, connOut *C.int) C.int {
+	return dial(sd, network, addr, -1, connOut)
+}
+
+// DialTimeout is TsnetDial with a deadline: it blocks until the connection
+// is established or timeoutMs milliseconds have elapsed. timeoutMs <= 0
+// means no deadline. It is also cancellable with TsnetCancel.
+//
+//export TsnetDialTimeout
+func TsnetDialTimeout(sd C.int, network, addr *C.char, timeoutMs C.longlong, connOut *C.int) C.int {
+	return dial(sd, network, addr, timeoutMs, connOut)
+}
+
+func dial(sd C.int, network, addr *C.char, timeoutMs C.longlong, connOut *C.int) C.int {
 	s := getServer(sd)
 	if s == nil {
 		return C.EBADF
 	}
-	netConn, err := s.s.Dial(context.Background(), C.GoString(network), C.GoString(addr))
+	// Cancellation is via TsnetCancel or the timeout.
+	ctx, pc := s.beginOp(false, timeoutMs)
+	defer s.endOp(false, pc)
+	netConn, err := s.s.Dial(ctx, C.GoString(network), C.GoString(addr))
 	if err != nil {
 		return s.recErr(err)
 	}
@@ -591,9 +723,9 @@ func TsnetSetLogFD(sd, fd C.int) C.int {
 		fmt.Fprintf(f, format, args...)
 		fmt.Fprintf(f, "\n")
 	}
-	// tsnet routes most messages through Server.logf, which prefers
-	// UserLogf and falls back to Go's standard log.Printf; Server.Logf
-	// alone never received them. Set both so the fd gets everything.
+	// tsnet routes some messages through UserLogf (falling back to Go's
+	// standard log.Printf, bypassing Logf entirely), so both must be set
+	// for the fd to receive everything.
 	s.s.Logf = logf
 	s.s.UserLogf = logf
 	return 0
