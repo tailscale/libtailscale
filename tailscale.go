@@ -587,10 +587,15 @@ func TsnetSetLogFD(sd, fd C.int) C.int {
 		return 0
 	}
 	f := os.NewFile(uintptr(fd), "logfd")
-	s.s.Logf = func(format string, args ...any) {
+	logf := func(format string, args ...any) {
 		fmt.Fprintf(f, format, args...)
 		fmt.Fprintf(f, "\n")
 	}
+	// tsnet routes most messages through Server.logf, which prefers
+	// UserLogf and falls back to Go's standard log.Printf; Server.Logf
+	// alone never received them. Set both so the fd gets everything.
+	s.s.Logf = logf
+	s.s.UserLogf = logf
 	return 0
 }
 
