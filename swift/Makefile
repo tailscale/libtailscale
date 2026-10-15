@@ -50,14 +50,69 @@ ios-sim:  ## Builds TailscaleKit for iOS to swift/build/Build/Products/Release-i
 	 CODE_SIGNING_ALLOWED=NO | $(XCPRETTIFIER)
 
 .PHONY: ios-fat
-ios-fat: ios-sim ios ## Builds TailscaleKit.xcframework to swift/build/Build/Products/Release-iphonefat
+ios-fat: ios-sim ios ## Builds TailscaleKit.xcframework (iOS + simulator) to swift/build/Build/Products/Release-iphonefat
 	@echo 
 	@echo "::: Building TailscaleKit.xcframework for ios and ios-simulator :::"
+	$(MAKE) inject-privacy-manifest-ios
 	mkdir -p ./build/Build/Products/Release-iphonefat
 	xcodebuild -create-xcframework \
 		-framework ./build/Build/Products/Release-iphoneos/TailscaleKit.framework \
 		-framework ./build/Build/Products/Release-iphonesimulator/TailscaleKit.framework \
 		-output ./build/Build/Products/Release-iphonefat/TailscaleKit.xcframework
+
+# The simulator slice belongs in a distributable xcframework and does not put an
+# App Store submission at risk. An xcframework is a container, not the submitted
+# artifact: Xcode resolves it at build time and embeds only the slice matching the
+# destination, so an app archived for the App Store carries the ios-arm64 slice
+# alone. The rule people remember — "no simulator binaries in a submission" — comes
+# from fat frameworks, where lipo put device and simulator architectures in one
+# binary with no way for Xcode to pick one. That is the problem xcframeworks exist
+# to solve, and it is why "ios" and "ios-sim" are separate targets here.
+#
+# What does need checking is that each slice is genuinely what its name says;
+# script/validate-xcframework.sh verifies the build platform of every architecture
+# in every slice, so simulator code cannot reach a device slice unnoticed.
+.PHONY: xcframework
+xcframework: ios-sim ios macos ## Builds a distributable 3-slice TailscaleKit.xcframework (iOS + simulator + macOS)
+	@echo
+	@echo "::: Building distributable TailscaleKit.xcframework (ios, ios-simulator, macos) :::"
+	$(MAKE) inject-privacy-manifest-ios
+	$(MAKE) inject-privacy-manifest-macos
+	mkdir -p ./build/Build/Products/Release-all
+	xcodebuild -create-xcframework \
+		-framework ./build/Build/Products/Release-iphoneos/TailscaleKit.framework \
+		-framework ./build/Build/Products/Release-iphonesimulator/TailscaleKit.framework \
+		-framework ./build/Build/Products/Release/TailscaleKit.framework \
+		-output ./build/Build/Products/Release-all/TailscaleKit.xcframework
+	@echo "Wrote ./build/Build/Products/Release-all/TailscaleKit.xcframework"
+	@echo "Validate before distributing:  ./script/validate-xcframework.sh ./build/Build/Products/Release-all/TailscaleKit.xcframework"
+
+# Apple rejects an app at UPLOAD (ITMS-91053), not at build, if an embedded
+# iOS framework slice has no PrivacyInfo.xcprivacy. TailscaleKit collects
+# nothing, but the manifest still has to be present.
+.PHONY: inject-privacy-manifest-ios
+inject-privacy-manifest-ios:
+	@for fw in ./build/Build/Products/Release-iphoneos/TailscaleKit.framework \
+	           ./build/Build/Products/Release-iphonesimulator/TailscaleKit.framework; do \
+		if [ -d "$$fw" ]; then \
+			cp ./PrivacyInfo.xcprivacy "$$fw/PrivacyInfo.xcprivacy"; \
+			echo "Injected PrivacyInfo.xcprivacy -> $$fw"; \
+		fi; \
+	done
+
+# macOS frameworks are versioned bundles. The manifest must live in
+# Versions/A/Resources/ so it is covered by the Versions/A/_CodeSignature
+# seal; left at the bundle root it is unsealed and upload fails with 90238.
+.PHONY: inject-privacy-manifest-macos
+inject-privacy-manifest-macos:
+	@fw=./build/Build/Products/Release/TailscaleKit.framework; \
+	if [ -d "$$fw" ]; then \
+		mkdir -p "$$fw/Versions/A/Resources"; \
+		cp ./PrivacyInfo.xcprivacy "$$fw/Versions/A/Resources/PrivacyInfo.xcprivacy"; \
+		rm -f "$$fw/Info.plist"; \
+		codesign --force --sign - --timestamp=none "$$fw" >/dev/null 2>&1 || true; \
+		echo "Injected PrivacyInfo.xcprivacy -> $$fw/Versions/A/Resources"; \
+	fi
 
 .PHONY: test
 test: ## Run tests (macOS)
