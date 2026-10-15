@@ -27,6 +27,19 @@ class Tailscale
       end
     end
 
+    # libtailscale isolates host signal state itself while loading (its
+    # constructor snapshots handler dispositions and blocks signals for
+    # the Go runtime's threads; see SIGNALS.md in the libtailscale repo).
+    # Completing the isolation requires restoring this thread's signal
+    # mask, which only this thread can do — so do it right after the
+    # library loads, keeping traps and Ctrl+C fully live even before any
+    # server is created. Older libraries: no-op fallback.
+    begin
+      attach_function :tailscale_signal_restore, [], :void
+      tailscale_signal_restore
+    rescue FFI::NotFoundError
+    end
+
     attach_function :TsnetNewServer, [], :int
     attach_function :TsnetStart, [:int], :int
     attach_function :TsnetUp, [:int], :int, blocking: true
@@ -44,6 +57,26 @@ class Tailscale
     attach_function :TsnetGetRemoteAddr, [:int, :int, :pointer, :size_t], :int
     attach_function :TsnetErrmsg, [:int, :pointer, :size_t], :int
     attach_function :TsnetLoopback, [:int, :pointer, :size_t, :pointer, :pointer], :int
+
+    # Cancellation and timeout APIs (libtailscale with TsnetCancel). Older
+    # libraries don't export them; attach opportunistically and fall back to
+    # the legacy, non-interruptible blocking behavior when they're missing.
+    @cancellable = false
+    begin
+      attach_function :TsnetUpTimeout, [:int, :int64], :int, blocking: true
+      attach_function :TsnetDialTimeout, [:int, :string, :string, :int64, :pointer], :int, blocking: true
+      attach_function :TsnetCancel, [:int], :int
+      @cancellable = true
+    rescue FFI::NotFoundError
+    end
+
+    # Returns whether the loaded libtailscale supports cancelable blocking
+    # calls (TsnetUpTimeout/TsnetDialTimeout/TsnetCancel). When false, +up+
+    # and +dial+ block until the Go call completes and cannot be timed out
+    # or interrupted.
+    def self.cancellable?
+      @cancellable
+    end
   end
 
   class ClosedError < StandardError
@@ -194,8 +227,39 @@ class Tailscale
 
   # Bring the tailscale server up and wait for it to be usable. This method
   # blocks until the node is fully authorized.
-  def up
-    Error.check(self, Libtailscale::TsnetUp(@t))
+  #
+  # If +timeout+ is given (a number of seconds), the call blocks at most
+  # that long and raises Tailscale::Error if it expires.
+  #
+  # While blocked, this method remains responsive to interrupts such as
+  # Ctrl+C in irb, Timeout.timeout, or Thread#raise: the underlying Go call
+  # runs on a helper thread and is canceled with TsnetCancel if this thread
+  # is interrupted, after which the interrupt is re-raised.
+  def up(timeout: nil)
+    assert_open
+    timeout_ms = timeout ? (timeout * 1000).ceil : -1
+    if Libtailscale.cancellable?
+      run_interruptible do
+        if timeout_ms >= 0
+          Libtailscale.TsnetUpTimeout(@t, timeout_ms)
+        else
+          Libtailscale.TsnetUp(@t)
+        end
+      end
+    elsif timeout_ms >= 0
+      raise Error.new("tailscale error: up timeout requires a libtailscale with TsnetUpTimeout", -1)
+    else
+      Error.check(self, Libtailscale::TsnetUp(@t))
+    end
+  end
+
+  # Cancel the most recent pending blocking operation on this server (+up+
+  # or +dial+), making it return a canceled error. This also happens
+  # automatically when +close+ is called or when +up+ or +dial+ are
+  # interrupted. Canceling a completed operation is a no-op.
+  def cancel
+    assert_open
+    Libtailscale.TsnetCancel(@t)
   end
 
   # Close the tailscale server.
@@ -253,11 +317,34 @@ class Tailscale
 
   # Dial a network address. +network+ is one of "tcp" or "udp". +addr+ is the
   # remote address to connect to. This method blocks until the connection is established.
-  def dial(network, addr)
+  #
+  # If +timeout+ is given (a number of seconds), the call blocks at most
+  # that long and raises Tailscale::Error if it expires. Like +up+, the call
+  # remains responsive to interrupts while it blocks.
+  def dial(network, addr, timeout: nil)
     assert_open
-    conn = FFI::MemoryPointer.new(:int)
-    Error.check(self, Libtailscale::TsnetDial(@t, network, addr, conn))
-    IO::new(conn.read_int)
+    timeout_ms = timeout ? (timeout * 1000).ceil : -1
+    if Libtailscale.cancellable?
+      io = nil
+      run_interruptible do
+        conn = FFI::MemoryPointer.new(:int)
+        code =
+          if timeout_ms >= 0
+            Libtailscale.TsnetDialTimeout(@t, network, addr, timeout_ms, conn)
+          else
+            Libtailscale.TsnetDial(@t, network, addr, conn)
+          end
+        io = IO::new(conn.read_int) if code == 0
+        code
+      end
+      io
+    elsif timeout_ms >= 0
+      raise Error.new("tailscale error: dial timeout requires a libtailscale with TsnetDialTimeout", -1)
+    else
+      conn = FFI::MemoryPointer.new(:int)
+      Error.check(self, Libtailscale.TsnetDial(@t, network, addr, conn))
+      IO::new(conn.read_int)
+    end
   end
 
   # Listen on a network address. +network+ is one of "tcp" or "udp". +addr+ is
@@ -307,5 +394,38 @@ class Tailscale
   # Check if the tailscale server is open.
   def assert_open
     raise ClosedError if @t <= 0
+  end
+
+  private
+
+  # Runs the given blocking FFI call on a helper thread so that the calling
+  # thread stays responsive to interrupts (signals such as Ctrl+C, Timeout,
+  # Thread#raise) while the Go call blocks. If the calling thread is
+  # interrupted, the Go call is canceled with TsnetCancel and the interrupt
+  # is re-raised once the call has wound down.
+  def run_interruptible
+    result = nil
+    worker = Thread.new do
+      result = yield
+    rescue Exception => e
+      result = e
+    end
+    begin
+      # join is an interruptible checkpoint for the calling thread.
+      worker.join
+    rescue Exception
+      begin
+        Libtailscale.TsnetCancel(@t)
+      rescue StandardError
+        nil
+      end
+      # Bound the wait: a canceled call returns promptly, but a wedged
+      # runtime must not turn an interrupt into a new hang. If it expires,
+      # the worker thread leaks until the Go call completes.
+      worker.join(10)
+      raise
+    end
+    raise result if result.is_a?(Exception)
+    Error.check(self, result)
   end
 end
