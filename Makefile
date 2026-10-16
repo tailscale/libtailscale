@@ -43,6 +43,16 @@ libtailscale_ios_sim_arm64.a:
 libtailscale_ios_sim_x86_64.a:
 	GOOS=ios GOARCH=amd64 CC=$(PWD)/swift/script/clangwrap-ios-sim-x86.sh go build -v -ldflags -w -tags ios -o $@ -buildmode=c-archive
 
+libtailscale_macos_arm64.a:
+	GOOS=darwin GOARCH=arm64 CC=$(PWD)/swift/script/clangwrap-macos-arm.sh $(DARWIN_DEPLOYMENT_TARGET) go build -v -ldflags -w -o $@ -buildmode=c-archive
+
+libtailscale_macos_x86_64.a:
+	GOOS=darwin GOARCH=amd64 CC=$(PWD)/swift/script/clangwrap-macos-x86.sh $(DARWIN_DEPLOYMENT_TARGET) go build -v -ldflags -w -o $@ -buildmode=c-archive
+
+.PHONY: c-archive-macos-universal
+c-archive-macos-universal: libtailscale_macos_arm64.a libtailscale_macos_x86_64.a ## Builds a universal (arm64 + x86_64) libtailscale.a for macOS
+	lipo -create -output libtailscale.a libtailscale_macos_arm64.a libtailscale_macos_x86_64.a
+
 .PHONY: c-archive-ios
 c-archive-ios: libtailscale_ios.a  ## Builds libtailscale_ios.a for iOS (iOS SDK required)
 
