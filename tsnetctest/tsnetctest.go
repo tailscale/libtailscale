@@ -294,9 +294,12 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
+	"syscall"
 	"testing"
 	"time"
 
+	"golang.org/x/sys/unix"
 	"tailscale.com/net/netns"
 	"tailscale.com/tstest/integration"
 	"tailscale.com/tstest/integration/testcontrol"
@@ -402,5 +405,39 @@ func RunTestGetRemoteAddr(t *testing.T) {
 
 	if C.test_getremoteaddr() != 0 {
 		t.Fatal(C.GoString(C.err))
+	}
+}
+
+// RunTestSetLogFD checks that libtailscale leaves the fd passed to
+// tailscale_set_logfd open after the logger is replaced and the
+// server is closed: the fd belongs to the caller.
+func RunTestSetLogFD(t *testing.T) {
+	var p [2]int
+	if err := syscall.Pipe(p[:]); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		syscall.Close(p[0])
+		syscall.Close(p[1])
+	})
+
+	sd := C.tailscale_new()
+	if C.tailscale_set_logfd(sd, C.int(p[1])) != 0 {
+		t.Fatal("tailscale_set_logfd failed")
+	}
+	if C.tailscale_set_logfd(sd, -1) != 0 {
+		t.Fatal("tailscale_set_logfd(-1) failed")
+	}
+	if C.tailscale_close(sd) != 0 {
+		t.Fatal("tailscale_close failed")
+	}
+
+	// Give any finalizer holding the fd a chance to run.
+	for i := 0; i < 10; i++ {
+		runtime.GC()
+		time.Sleep(10 * time.Millisecond)
+	}
+	if _, err := unix.FcntlInt(uintptr(p[1]), unix.F_GETFD, 0); err != nil {
+		t.Fatalf("log fd %d was closed by libtailscale: %v", p[1], err)
 	}
 }
