@@ -1,7 +1,15 @@
 // Copyright (c) Tailscale Inc & AUTHORS
 // SPDX-License-Identifier: BSD-3-Clause
 
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
 import Foundation
+#endif
+
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 let kLocalAPIPath = "/localapi/v0/"
 
@@ -38,14 +46,13 @@ public actor LocalAPIClient {
 
     /// The local node that will be handling our localAPI requests.
     let node: TailscaleNode
-    
-    let logger: LogSink?
 
-    public init(localNode: TailscaleNode, logger: LogSink?) {
+    let logger: (any LogSink)?
+
+    public init(localNode: TailscaleNode, logger: (any LogSink)?) {
         self.node = localNode
         self.logger = logger
     }
-
 
     // MARK: - IPN Bus
 
@@ -62,7 +69,7 @@ public actor LocalAPIClient {
     ///   - consumer: an actor implementing MessageConsumer to which incoming events will be sent
     /// - Returns: The MessageProcessor handling the incoming event stream.  This should be destroyed/stopped when the caller
     ///            wishes to unsubscribe from the event stream.
-    public func watchIPNBus(mask: Ipn.NotifyWatchOpt, consumer: MessageConsumer) async throws -> MessageProcessor {
+    public func watchIPNBus(mask: Ipn.NotifyWatchOpt, consumer: any MessageConsumer) async throws -> MessageProcessor {
         let params = [URLQueryItem(name: "mask", value: String(mask.rawValue))]
         let (request, sessionConfig) = try await self.basicAuthURLRequest(endpoint: .watchIPNBus,
                                                                           method: .GET,
@@ -177,15 +184,15 @@ public actor LocalAPIClient {
             resultTransformer: jsonDecodeTransformer(IpnLocal.LoginProfile.self))
 
         switch result {
-        case .success(let result):  return result
-        case .failure(let error):  throw error
+        case .success(let result): return result
+        case .failure(let error): throw error
         }
     }
 
     public func addProfile() async throws {
         let error = await doSimpleAPIRequest(
             endpoint: .profiles,
-            path: "", // Important, we need the trailing /
+            path: "",  // Important, we need the trailing /
             method: .PUT,
             resultTransformer: errorTransformer)
 
@@ -196,7 +203,7 @@ public actor LocalAPIClient {
     }
 
     public func switchProfile(profileID: String) async throws {
-        let error = await  doSimpleAPIRequest(
+        let error = await doSimpleAPIRequest(
             endpoint: .profiles,
             path: profileID,
             method: .POST,
@@ -227,14 +234,14 @@ public actor LocalAPIClient {
     ///
     /// The majority of the information this returns can be observed using watchIPNBus.
     public func backendStatus() async throws -> IpnState.Status {
-        let result =  await doSimpleAPIRequest(
+        let result = await doSimpleAPIRequest(
             endpoint: .status,
             method: .GET,
             resultTransformer: jsonDecodeTransformer(IpnState.Status.self))
 
         switch result {
-        case .success(let result):  return result
-        case .failure(let error):  throw error
+        case .success(let result): return result
+        case .failure(let error): throw error
         }
     }
 
@@ -246,18 +253,26 @@ public actor LocalAPIClient {
                                      headers: [String: String]? = nil,
                                      params: [URLQueryItem]? = nil) async throws -> (URLRequest, URLSessionConfiguration) {
 
+        #if canImport(Network)
         let (sessionConfig, loopbackConfig) = try await URLSessionConfiguration.tailscaleSession(node)
+        #else
+        let sessionConfig = URLSessionConfiguration.default
+        let loopbackConfig = try await node.loopback()
+        #endif
 
         var endpointPath = endpoint.rawValue
         if let path {
             endpointPath = endpointPath + "/" + path
         }
 
-        logger?.log("Requesting \(endpointPath) via \(loopbackConfig.ip!):\(loopbackConfig.port!)")
+        guard let ip = loopbackConfig.ip, let port = loopbackConfig.port else {
+            throw LocalAPIError.localAPIURLRequestError
+        }
+        logger?.log("Requesting \(endpointPath) via \(ip):\(port)")
 
         var urlComponents = URLComponents()
-        urlComponents.host = loopbackConfig.ip
-        urlComponents.port = loopbackConfig.port
+        urlComponents.host = ip
+        urlComponents.port = port
         urlComponents.scheme = "http"
         urlComponents.path = "\(kLocalAPIPath)\(endpointPath)"
         urlComponents.queryItems = params
@@ -281,7 +296,7 @@ public actor LocalAPIClient {
 
     private func parseAPIResponse(data: Data?,
                                   response: URLResponse?,
-                                  error: Error?) -> Result<Data, Error> {
+                                  error: (any Error)?) -> Result<Data, any Error> {
 
         if let error {
             return .failure(error)
@@ -310,7 +325,7 @@ public actor LocalAPIClient {
         bodyAsJSON: BodyT,
         headers: [String: String]? = nil,
         timeoutInterval: TimeInterval = 60,
-        resultTransformer: @escaping (_ result: Result<Data, Error>) -> ResultT
+        resultTransformer: @escaping (_ result: Result<Data, any Error>) -> ResultT
     ) async -> ResultT {
         do {
             let encodedBody = try JSONEncoder().encode(bodyAsJSON)
@@ -335,16 +350,16 @@ public actor LocalAPIClient {
         body: Data? = nil,
         headers: [String: String]? = nil,
         timeoutInterval: TimeInterval = 60,
-        resultTransformer: @escaping (_ result: Result<Data, Error>) -> T) async -> T {
+        resultTransformer: @escaping (_ result: Result<Data, any Error>) -> T) async -> T {
 
             var request: URLRequest
             var sessionConfig: URLSessionConfiguration
             do {
                 (request, sessionConfig) = try await self.basicAuthURLRequest(endpoint: endpoint,
-                                                             path: path,
-                                                             method: method,
-                                                             headers: headers,
-                                                             params: params)
+                                                                path: path,
+                                                                method: method,
+                                                                headers: headers,
+                                                                params: params)
 
             } catch {
                 return resultTransformer(.failure(error))
@@ -369,18 +384,18 @@ public actor LocalAPIClient {
             } catch {
                 return resultTransformer(.failure(error))
             }
-        }
+    }
 
     // MARK: - Transformers
 
-    private func errorTransformer(result: Result<Data, Error>) -> Error? {
+    private func errorTransformer(result: Result<Data, any Error>) -> (any Error)? {
         switch result {
         case .success: return nil
         case .failure(let error): return error
         }
     }
 
-    private func jsonDecodeTransformer<T: Decodable>(_ type: T.Type) -> (_ result: Result<Data, Error>) -> Result<T, Error> {
+    private func jsonDecodeTransformer<T: Decodable>(_ type: T.Type) -> (_ result: Result<Data, any Error>) -> Result<T, any Error> {
         return { result in
             switch result {
             case .success(let data):

@@ -2,10 +2,13 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 import Foundation
-import Combine
+
+#if canImport(CTailscale)
+import CTailscale
+#endif
 
 /// ConnectionState indicates the state of individual TSConnection instances
-public enum ConnectionState {
+public enum ConnectionState: Sendable {
     case idle           ///< Reads and writes are not possible.  Connections will transition to connected automatically
     case connected      ///< Connected and ready to read/write
     case closed         ///< Closed and ready to be disposed of.  Closed connections cannot be reconnected.
@@ -13,7 +16,7 @@ public enum ConnectionState {
 }
 
 /// ListenerState indicates the state of individual TSListener instances
-public enum ListenerState {
+public enum ListenerState: Sendable {
     case idle           ///< Waiting.
     case listening      ///< Listening
     case closed         ///< Closed and ready to be disposed of.
@@ -34,7 +37,7 @@ public actor OutgoingConnection {
     private var address: String
     private var conn: TailscaleConnection = 0
 
-    private let logger: LogSink
+    private let logger: any LogSink
 
     /// The state of the connection.  Listen for transitions to determine
     /// if the connection may be used for send/receive operations.
@@ -51,7 +54,7 @@ public actor OutgoingConnection {
     public init(tailscale: TailscaleHandle,
          to address: String,
          proto: NetProtocol,
-         logger: LogSink) async throws {
+         logger: any LogSink) async throws {
 
         self.logger = logger
         self.proto = proto
@@ -65,7 +68,7 @@ public actor OutgoingConnection {
     /// @See tailscale_dial in Tailscale.h
     ///
     /// @throws TailscaleError on failure
-    public func connect() async throws  {
+    public func connect() async throws {
         let res = tailscale_dial(tailscale, proto.rawValue, address, &conn)
 
         guard res == 0 else {
@@ -78,7 +81,7 @@ public actor OutgoingConnection {
 
     deinit {
         if conn != 0 {
-            Darwin.close(conn)
+            _ = System.close(conn)
         }
     }
 
@@ -87,7 +90,7 @@ public actor OutgoingConnection {
     /// state to .closed
     public func close() {
         if conn != 0 {
-            Darwin.close(conn)
+            _ = System.close(conn)
             conn = 0
         }
         state = .closed
@@ -101,7 +104,7 @@ public actor OutgoingConnection {
             throw TailscaleError.connectionClosed
         }
 
-        let bytesWritten = Darwin.write(conn, data.withUnsafeBytes { $0.baseAddress! }, data.count)
+        let bytesWritten = System.write(conn, data.withUnsafeBytes { $0.baseAddress! }, data.count)
 
         if bytesWritten != data.count {
             throw TailscaleError.shortWrite
