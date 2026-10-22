@@ -586,12 +586,35 @@ func TsnetSetLogFD(sd, fd C.int) C.int {
 		s.s.Logf = logger.Discard
 		return 0
 	}
-	f := os.NewFile(uintptr(fd), "logfd")
+	// Write to fd directly rather than through os.NewFile: an *os.File
+	// closes its fd when garbage collected, and fd belongs to the caller.
+	f := fdWriter(fd)
 	s.s.Logf = func(format string, args ...any) {
 		fmt.Fprintf(f, format, args...)
 		fmt.Fprintf(f, "\n")
 	}
 	return 0
+}
+
+// fdWriter is an io.Writer for a file descriptor it does not own.
+type fdWriter int
+
+func (w fdWriter) Write(b []byte) (int, error) {
+	var n int
+	for n < len(b) {
+		m, err := syscall.Write(int(w), b[n:])
+		if err == syscall.EINTR {
+			continue
+		}
+		if err != nil {
+			return n, err
+		}
+		if m == 0 {
+			return n, io.ErrShortWrite
+		}
+		n += m
+	}
+	return n, nil
 }
 
 //export TsnetLoopback
