@@ -285,8 +285,8 @@ func TsnetListen(sd C.int, network, addr *C.char, listenerOut *C.int) C.int {
 			if err != nil {
 				return
 			}
-			var connFd C.int
-			if err := newConn(s, netConn, &connFd); err != nil {
+			connFd, err := newConn(s, netConn)
+			if err != nil {
 				if s.s.Logf != nil {
 					s.s.Logf("libtailscale.accept: newConn: %v", err)
 				}
@@ -399,27 +399,33 @@ func TsnetAccept(listenerFd C.int, connOut *C.int) C.int {
 	return 0
 }
 
-func newConn(s *server, netConn net.Conn, connOut *C.int) error {
+// newConn pumps netConn through a socketpair and returns the C side.
+func newConn(s *server, netConn net.Conn) (C.int, error) {
 	fds, err := syscall.Socketpair(syscall.AF_LOCAL, syscall.SOCK_STREAM, 0)
 	if err != nil {
-		return err
+		return -1, err
 	}
 	r := os.NewFile(uintptr(fds[1]), "socketpair-r")
 	c := &conn{s: s.s, c: netConn, r: r}
 	fdC := C.int(fds[0])
+	// Key cleanup by the Go-owned end: it stays open until connCleanup, so
+	// its number cannot be reused while this connection is alive. fdC is
+	// handed to C, which may close it at any time (TsnetListen closes it
+	// right after sendmsg), and its number is then often reused at once.
+	fdGo := C.int(fds[1])
 
 	conns.mu.Lock()
 	if conns.m == nil {
 		conns.m = make(map[C.int]*conn)
 	}
-	conns.m[fdC] = c
+	conns.m[fdGo] = c
 	conns.mu.Unlock()
 
 	connCleanup := func() {
 		var inCleanup bool
 		conns.mu.Lock()
-		if tsConn, ok := conns.m[fdC]; ok && tsConn.c == netConn {
-			delete(conns.m, fdC)
+		if tsConn, ok := conns.m[fdGo]; ok && tsConn.c == netConn {
+			delete(conns.m, fdGo)
 			inCleanup = true
 		}
 		conns.mu.Unlock()
@@ -458,8 +464,7 @@ func newConn(s *server, netConn net.Conn, connOut *C.int) error {
 		connCleanup()
 	}()
 
-	*connOut = fdC
-	return nil
+	return fdC, nil
 }
 
 //export TsnetGetRemoteAddr
@@ -516,9 +521,11 @@ func TsnetDial(sd C.int, network, addr *C.char, connOut *C.int) C.int {
 		return s.recErr(err)
 	}
 	s.started = true
-	if err := newConn(s, netConn, connOut); err != nil {
+	fd, err := newConn(s, netConn)
+	if err != nil {
 		return s.recErr(err)
 	}
+	*connOut = fd
 	return 0
 }
 
