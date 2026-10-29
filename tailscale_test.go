@@ -1,10 +1,12 @@
 package main
 
 import (
+	"syscall"
 	"testing"
 	"time"
 
 	"github.com/tailscale/libtailscale/tsnetctest"
+	"golang.org/x/sys/unix"
 )
 
 func TestConn(t *testing.T) {
@@ -64,6 +66,89 @@ func TestConn(t *testing.T) {
 // are being reused across connections (tailscale/tailscale#18310).
 func TestGetRemoteAddr(t *testing.T) {
 	tsnetctest.RunTestGetRemoteAddr(t)
+}
+
+// TestSocketpairCloexec checks that socketpair returns both ends
+// close-on-exec, so that spawned processes cannot inherit the
+// listener and connection fds.
+func TestSocketpairCloexec(t *testing.T) {
+	fds, err := socketpair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer syscall.Close(fds[0])
+	defer syscall.Close(fds[1])
+
+	for _, fd := range fds {
+		flags, err := unix.FcntlInt(uintptr(fd), syscall.F_GETFD, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if flags&syscall.FD_CLOEXEC == 0 {
+			t.Errorf("socketpair end %d is not close-on-exec", fd)
+		}
+	}
+}
+
+// TestRecvFdCloexec exercises the SCM_RIGHTS receive path TsnetAccept
+// uses: an fd passed over the listener socketpair must be
+// close-on-exec by the time it reaches C (via MSG_CMSG_CLOEXEC in
+// recvFlags on Linux, via closeOnExec on platforms without it).
+func TestRecvFdCloexec(t *testing.T) {
+	sp, err := socketpair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer syscall.Close(sp[0])
+	defer syscall.Close(sp[1])
+
+	// The fd we ship across the socketpair.
+	pair, err := socketpair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer syscall.Close(pair[0])
+	defer syscall.Close(pair[1])
+
+	var rec [listenAddrLen]byte
+	copy(rec[:], "1.2.3.4")
+	if err := syscall.Sendmsg(sp[0], rec[:], syscall.UnixRights(pair[0]), nil, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	data := make([]byte, listenAddrLen)
+	cbuf := make([]byte, syscall.CmsgSpace(4))
+	n, oobn, _, _, err := syscall.Recvmsg(sp[1], data, cbuf, recvFlags)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != listenAddrLen {
+		t.Fatalf("got %d bytes, want %d", n, listenAddrLen)
+	}
+	scms, err := syscall.ParseSocketControlMessage(cbuf[:oobn])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scms) != 1 {
+		t.Fatalf("got %d control messages, want 1", len(scms))
+	}
+	fds, err := syscall.ParseUnixRights(&scms[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fds) != 1 {
+		t.Fatalf("got %d fds, want 1", len(fds))
+	}
+	closeOnExec(fds[0]) // mirrors TsnetAccept
+	defer syscall.Close(fds[0])
+
+	flags, err := unix.FcntlInt(uintptr(fds[0]), syscall.F_GETFD, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if flags&syscall.FD_CLOEXEC == 0 {
+		t.Errorf("fd received via SCM_RIGHTS is not close-on-exec")
+	}
 }
 
 func TestExtractIP(t *testing.T) {

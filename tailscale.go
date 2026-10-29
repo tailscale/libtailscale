@@ -240,7 +240,9 @@ func TsnetListen(sd C.int, network, addr *C.char, listenerOut *C.int) C.int {
 	// feed an fd for the connection through the listener. This lets C use
 	// epoll on the tailscale_listener to know if it should call
 	// tailscale_accept, which avoids a blocking call on the far side.
-	fds, err := syscall.Socketpair(syscall.AF_LOCAL, syscall.SOCK_STREAM, 0)
+	// Both ends are close-on-exec, so spawned processes do not inherit
+	// them.
+	fds, err := socketpair()
 	if err != nil {
 		return s.recErr(err)
 	}
@@ -336,7 +338,8 @@ func TsnetAccept(listenerFd C.int, connOut *C.int) C.int {
 
 	// One record per connection: the fd via SCM_RIGHTS plus its remote
 	// IP. The fd parsed below is the number the kernel installed, i.e.
-	// the number C will hold.
+	// the number C will hold, and it is close-on-exec (via recvFlags on
+	// Linux, or the closeOnExec call below elsewhere).
 	//
 	// The socketpair is a stream socket, so records are framed here:
 	// each read asks for the remaining bytes of the head record, with
@@ -352,7 +355,7 @@ func TsnetAccept(listenerFd C.int, connOut *C.int) C.int {
 			// the cmsg rode with the record's first byte; only the tail remains
 			cbuf = nil
 		}
-		nn, on, _, _, err := syscall.Recvmsg(int(listenerFd), buf, cbuf, syscall.MSG_WAITALL)
+		nn, on, _, _, err := syscall.Recvmsg(int(listenerFd), buf, cbuf, recvFlags)
 		n += nn
 		if nn > 0 {
 			oobn = on
@@ -384,6 +387,7 @@ func TsnetAccept(listenerFd C.int, connOut *C.int) C.int {
 		return ln.s.recErr(fmt.Errorf("libtailscale: got %d FDs, want 1", len(fds)))
 	}
 	fd := C.int(fds[0])
+	closeOnExec(int(fd))
 
 	// the entry must exist before C can learn this fd number
 	addrLen := bytes.IndexByte(data, 0)
@@ -400,7 +404,7 @@ func TsnetAccept(listenerFd C.int, connOut *C.int) C.int {
 }
 
 func newConn(s *server, netConn net.Conn, connOut *C.int) error {
-	fds, err := syscall.Socketpair(syscall.AF_LOCAL, syscall.SOCK_STREAM, 0)
+	fds, err := socketpair()
 	if err != nil {
 		return err
 	}

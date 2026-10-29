@@ -10,6 +10,7 @@ package tsnetctest
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include "../tailscale.h"
 
 char* tmps1;
@@ -26,6 +27,21 @@ int errlen = 512;
 char* err = NULL;
 
 tailscale s1, s2;
+
+// check_cloexec fails the test if fd is not close-on-exec. Listener
+// and connection fds must not leak into processes the host forks.
+int check_cloexec(int fd) {
+	int flags = fcntl(fd, F_GETFD);
+	if (flags == -1) {
+		snprintf(err, errlen, "fcntl(%d, F_GETFD): errno %d (%s)", fd, errno, strerror(errno));
+		return 1;
+	}
+	if (!(flags & FD_CLOEXEC)) {
+		snprintf(err, errlen, "fd %d is not close-on-exec", fd);
+		return 1;
+	}
+	return 0;
+}
 
 int set_err(tailscale sd, char tag) {
 	err[0] = tag;
@@ -74,15 +90,24 @@ int test_conn() {
 	if ((ret = tailscale_listen(s1, "tcp", ":8081", &ln)) != 0) {
 		return set_err(s1, '8');
 	}
+	if (check_cloexec(ln)) {
+		return 1;
+	}
 
 	tailscale_conn w;
 	if ((ret = tailscale_dial(s2, "tcp", "100.64.0.1:8081", &w)) != 0) {
 		return set_err(s2, '9');
 	}
+	if (check_cloexec(w)) {
+		return 1;
+	}
 
 	tailscale_conn r;
 	if ((ret = tailscale_accept(ln, &r)) != 0) {
 		return set_err(s2, 'a');
+	}
+	if (check_cloexec(r)) {
+		return 1;
 	}
 
 	const char want[] = "hello";
