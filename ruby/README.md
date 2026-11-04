@@ -33,6 +33,31 @@ while c = l.accept
 end
 ```
 
+### Interrupting blocking calls
+
+`up` and `dial` block until the node is usable (e.g. authorized). Both
+methods stay responsive to interrupts while blocked: `Ctrl+C` in irb,
+`Timeout.timeout`, or `Thread#raise` cancel the underlying Go call and
+re-raise the interrupt. Both also take an optional `timeout:` (in seconds):
+
+```ruby
+t.up(timeout: 30)   # raises Tailscale::Error after 30 seconds
+t.cancel            # or interrupt the most recent up/dial yourself
+```
+
+A `up` that was interrupted or timed out may leave the server partially
+started; create a new `Tailscale` instance rather than retrying on the
+same one.
+
+### Signal handling
+
+The gem loads a Go runtime as a shared library, which normally takes over
+some process-global signal handling. libtailscale isolates this while it
+loads (and the gem completes it with one call right after loading), so
+Ruby's own signal handling (`Signal.trap`, `Ctrl+C`, `SystemStackError`)
+keeps working unchanged. See [SIGNALS.md](../SIGNALS.md) in the
+libtailscale repository for details.
+
 ## Development
 
 After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake test` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.

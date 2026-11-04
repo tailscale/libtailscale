@@ -43,6 +43,18 @@ libtailscale_ios_sim_arm64.a:
 libtailscale_ios_sim_x86_64.a:
 	GOOS=ios GOARCH=amd64 CC=$(PWD)/swift/script/clangwrap-ios-sim-x86.sh go build -v -ldflags -w -tags ios -o $@ -buildmode=c-archive
 
+.PHONY: check-signals
+deps = $(shell go list -deps . 2>/dev/null)
+check-signals: ## Fails if os/signal is linked in: it would steal host signal handlers
+	@if echo "$(deps)" | grep -qx 'os/signal'; then \
+		echo "FAIL: os/signal is linked into libtailscale."; \
+		echo "  Signal.Notify in a Go c-archive/c-shared library installs Go handlers"; \
+		echo "  for host signals (SIGINT, SIGTERM, ...) and breaks the embedding"; \
+		echo "  runtime's signal handling. See SIGNALS.md."; \
+		exit 1; \
+	fi; \
+	echo "OK: os/signal is not linked into libtailscale"
+
 .PHONY: c-archive-ios
 c-archive-ios: libtailscale_ios.a  ## Builds libtailscale_ios.a for iOS (iOS SDK required)
 
@@ -57,10 +69,10 @@ c-archive: libtailscale.a  ## Builds libtailscale.a for the target platform
 shared: libtailscale.so ## Builds libtailscale.so for the target platform
 
 .PHONY: test
-test: test-go test-ruby test-swift ## Runs all tests available on the host platform
+test: test-go test-ruby test-signals test-swift ## Runs all tests available on the host platform
 
 .PHONY: test-go
-test-go: ## Runs Go and C integration tests
+test-go: check-signals ## Runs Go and C integration tests
 	go test -v ./...
 
 .PHONY: test-ruby
@@ -69,6 +81,20 @@ test-ruby: ## Runs Ruby binding tests (requires ruby, bundler)
 		cd ruby && bundle exec rake test; \
 	else \
 		echo "skipping ruby tests: bundle not found"; \
+	fi
+
+.PHONY: test-signals
+test-signals: ## Runs host-signal compatibility tests (C embedder, then Ruby)
+	@if command -v ruby >/dev/null 2>&1 && ruby -e 'require "ffi"' >/dev/null 2>&1; then \
+		cd ruby && rake test:signals; \
+		cd .. && $(CC) -o /tmp/libtailscale-csigtest csigtest/main.c -ldl -lpthread \
+			&& /tmp/libtailscale-csigtest ruby/lib/libtailscale.$$(ruby -e 'print RbConfig::CONFIG["DLEXT"]'); \
+	elif command -v $(CC) >/dev/null 2>&1 && command -v go >/dev/null 2>&1; then \
+		$(MAKE) shared; \
+		$(CC) -o /tmp/libtailscale-csigtest csigtest/main.c -ldl -lpthread \
+			&& /tmp/libtailscale-csigtest libtailscale.so; \
+	else \
+		echo "skipping signal tests: need ruby with ffi, or go+cc for the C embedder test"; \
 	fi
 
 .PHONY: test-swift
