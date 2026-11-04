@@ -1,20 +1,20 @@
 # TailscaleKit
 
-The TailscaleKit Swift package provides an embedded network interface that can be
-used to listen for and dial connections to other [Tailscale](https://tailscale.com) nodes in addition 
-to an extension to URLSession which allows you to make URL requests to nodes on you Tailnet directly.
+The TailscaleKit Swift package provides an embedded network interface that can be used to listen for and dial connections to other [Tailscale](https://tailscale.com) nodes in addition to an extension to URLSession which allows you to make URL requests to nodes on you Tailnet directly.
 
 The interfaces are similar in design to NWConnection, but are Swift 6 compliant and
-designed to be used in modern async/await style code.  
+designed to be used in modern async/await style code.
 
 ## Build and Install
 
 Build Requirements:
-  - XCode 16.1 or newer
+
+- XCode 16.1 or newer
 
 Building Tailscale.framework:
 
-From /swift 
+From /swift
+
 ```bash
 $ make macos
 $ make ios
@@ -24,45 +24,40 @@ $ make ios-fat
 
 These recipes build different variants of TailscaleKit.framework into /swift/build/Build/Products.
 
-Separate frameworks will be built for macOS and iOS and the iOS Simulator.  All dependencies (libtailscale*.a)
-are built automatically.  Swift 6 is supported.
+Separate frameworks will be built for macOS and iOS and the iOS Simulator. All dependencies (libtailscale\*.a) are built automatically. Swift 6 is supported.
 
-The ios and ios-sim frameworks are purposefully separated.  The former is free of any simulator segments
-and is suitable for app-store submissions.   The latter is suitable for embedding when you 
-wish to run on a simulator in dev though 'make ios-fat' will produce an xcframework bundle including
-both simulator and device frameworks for development.
+The ios and ios-sim frameworks are purposefully separated. The former is free of any simulator segments and is suitable for app-store submissions. The latter is suitable for embedding when you wish to run on a simulator in dev though 'make ios-fat' will produce an xcframework bundle including both simulator and device frameworks for development.
 
 The frameworks are not signed and must be signed when they are embedded.
 
-Alternatively, you may build from xCode using the Tailscale scheme but the 
-libraries must be built first (since xCode will complain about paths and
-permissions)
+Alternatively, you may build from xCode using the Tailscale scheme but the libraries must be built first (since xCode will complain about paths and permissions)
 
-To build only the static libraries, from / 
+To build only the static libraries, from /
+
 ```bash
 $ make c-archive
-$ make c-archive-ios 
+$ make c-archive-ios
 $ make c-archive-ios-sim
 ```
 
-If you're writing pure C, or C++, link these and use the generated tailscale.h header.  
-make c-archive builds for the local machine architecture/platform (arm64 macOS from a mac)
+If you're writing pure C, or C++, link these and use the generated tailscale.h header. `make c-archive` builds for the local machine architecture/platform (arm64 macOS from a mac)
 
-Non-apple swift builds are not supported (yet) but should be possible with a little tweaking.
+Non-Apple platforms are supported via SwiftPM instead of Xcode: `make spm-setup` builds a `TailscaleKit.artifactbundle` (Linux always, plus native macOS variants when run on a Mac) that `swift build`/`swift test`/`swift run` consume directly, with no Xcode project or Go toolchain required by downstream consumers. See `swift/Examples/TailscaleKitCLI` for a minimal example.
 
 ## Tests
 
 From /swift
+
 ```bash
-$ make test
+$ make test      # Xcode/XCTest, macOS only
+$ make test-spm  # swift test, cross-platform (incl. Linux)
 ```
 
+On a fresh macOS checkout, make sure `objcopy`/`llvm-objcopy` is reachable (`xcrun -f llvm-objcopy` if you have a swift.org toolchain installed, otherwise `brew install llvm` or `brew install binutils`) before running `make test-spm` - `fix-tstestcontrol-archive.sh` needs it to build `libtstestcontrol.a` for the test target, and macOS doesn't ship one by default. Not needed for `make spm-setup`/`swift build`/`swift run` on their own.
 
 ## Usage
 
-Nodes need to be authorized in order to function. Set an auth key via
-the config.authKey parameter, or watch the ipn bus (see the example) for
-the browseToURL field for interactive web-based auth.
+Nodes need to be authorized in order to function. Set an auth key via the config.authKey parameter, or watch the ipn bus (see the example) for the browseToURL field for interactive web-based auth.
 
 Here's a working example using an auth key:
 
@@ -78,8 +73,8 @@ func start() -> TailscaleNode {
 
     // The logger is configurable.  The default will just print.
     let node = try TailscaleNode(config: config, logger: DefaultLogger())
-    
-    // Bring the node up 
+
+    // Bring the node up
     try await node.up()
     return node
 }
@@ -90,7 +85,7 @@ func fetchURL(_ url: URL, tailscale: TailscaleNode) async throws -> Data {
     // You can cache this.  It will not change once the node is up.
     let sessionConfig = try await URLSessionConfiguration.tailscaleSession(tailscale)
     let session = URLSession(configuration: sessionConfig)
-    
+
     // Make the request
     let req = URLRequest(url: url)
     let (data, _) = try await session.data(for: req)
@@ -102,14 +97,11 @@ The "node" created here should show up in the Tailscale admin panel as "TSNet-Te
 
 ### LocalAPI
 
-TailscaleKit.framework also includes a functional (though somewhat incomplete) implementation of 
-LocalAPI which can be used to track the state of the embedded tailscale instance in much greater
-detail.
+TailscaleKit.framework also includes a functional (though somewhat incomplete) implementation of LocalAPI which can be used to track the state of the embedded tailscale instance in much greater detail.
 
 ### Examples
 
-See the TailscaleKitHello example for a relatively complete implementation demonstrating proxied
-HTTP and usage of LocalAPI to track the tailnet state.
+See the TailscaleKitHello example for a relatively complete implementation demonstrating proxied HTTP and usage of LocalAPI to track the tailnet state.
 
 ## Contributing
 

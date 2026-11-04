@@ -24,3 +24,5 @@ libtailscale.bundle
 /sourcepkg/libtailscale.tar*
 
 /vendor/
+
+.build/
