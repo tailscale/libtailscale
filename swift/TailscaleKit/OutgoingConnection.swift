@@ -104,7 +104,7 @@ public actor OutgoingConnection {
         let bytesWritten = data.withUnsafeBytes { bytes in
             Darwin.write(conn, bytes.baseAddress, bytes.count)
         }
-
+        
         if bytesWritten != data.count {
             throw TailscaleError.shortWrite
         }
