@@ -1,0 +1,225 @@
+name: Upstream Tailscale compatibility
+
+on:
+  schedule:
+    - cron: '17 9 * * 1'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/upstream-compatibility.yml'
+      - '.github/scripts/check-upstream-compatibility.sh'
+
+# This workflow only changes disposable runner checkouts.
+permissions:
+  contents: read
+
+concurrency:
+  group: upstream-compatibility-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    name: Prepare latest stable Tailscale
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      current: ${{ steps.release.outputs.current }}
+      changed: ${{ steps.release.outputs.changed }}
+      go-version: ${{ steps.update.outputs.go-version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Find latest stable release
+        id: release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { readFileSync } = require('node:fs');
+            const current = readFileSync('go.mod', 'utf8').match(/^\s*(?:require\s+)?tailscale\.com\s+(v[^\s]+)(?:\s|$)/m);
+            if (!current) throw new Error('tailscale.com dependency missing from go.mod');
+            core.setOutput('current', current[1]);
+            const { data: release } = await github.rest.repos.getLatestRelease({
+              owner: 'tailscale', repo: 'tailscale',
+            });
+            if (release.draft || release.prerelease || !/^v\d+\.\d+\.\d+$/.test(release.tag_name)) {
+              throw new Error(`Unexpected stable release: ${release.tag_name}`);
+            }
+            core.setOutput('version', release.tag_name);
+            core.setOutput('changed', release.tag_name !== current[1]);
+            core.info(`Latest stable: ${release.tag_name}; checked in: ${current[1]}`);
+
+      - uses: actions/setup-go@v5
+        if: steps.release.outputs.changed == 'true'
+        with:
+          go-version-file: go.mod
+
+      - name: Update disposable checkout
+        id: update
+        if: steps.release.outputs.changed == 'true'
+        env:
+          TAILSCALE_VERSION: ${{ steps.release.outputs.version }}
+          GOTOOLCHAIN: auto
+        shell: bash
+        run: |
+          mkdir -p compatibility-logs
+          {
+            current=$(go list -m -f '{{.Version}}' tailscale.com)
+            echo "Updating tailscale.com from $current to $TAILSCALE_VERSION"
+            go get "tailscale.com@$TAILSCALE_VERSION"
+            go mod tidy
+            actual=$(go list -m -f '{{.Version}}' tailscale.com)
+            test "$actual" = "$TAILSCALE_VERSION"
+            go version
+            echo "go-version=$(go env GOVERSION)" >> "$GITHUB_OUTPUT"
+            git diff -- go.mod go.sum
+          } 2>&1 | tee compatibility-logs/update.log
+
+      - name: Share exact candidate dependencies
+        if: steps.release.outputs.changed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: compatibility-dependencies
+          path: |
+            go.mod
+            go.sum
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Save update diagnostics
+        if: always() && steps.release.outputs.changed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: compatibility-update-logs
+          path: compatibility-logs/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  check:
+    name: Compatibility / ${{ matrix.suite }}
+    needs: prepare
+    if: needs.prepare.outputs.changed == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: go-c
+            runner: ubuntu-latest
+          - suite: ruby
+            runner: ubuntu-latest
+          - suite: python
+            runner: ubuntu-latest
+          - suite: source-package
+            runner: ubuntu-latest
+          - suite: swift-tests
+            runner: macos-latest
+          - suite: swift-macos
+            runner: macos-latest
+          - suite: swift-ios
+            runner: macos-latest
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    env:
+      CGO_ENABLED: '1'
+      GOTOOLCHAIN: auto
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: compatibility-dependencies
+
+      # Read the updated go.mod: upstream may require a newer Go toolchain.
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Set up Ruby
+        if: matrix.suite == 'ruby'
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+          bundler-cache: true
+          working-directory: ruby
+
+      - name: Set up Python
+        if: matrix.suite == 'python'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build and test candidate
+        env:
+          SUITE: ${{ matrix.suite }}
+          TAILSCALE_VERSION: ${{ needs.prepare.outputs.version }}
+        shell: bash
+        run: |
+          mkdir -p compatibility-logs
+          bash .github/scripts/check-upstream-compatibility.sh "$SUITE" \
+            2>&1 | tee "compatibility-logs/$SUITE.log"
+
+      - name: Save logs and Xcode test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compatibility-${{ matrix.suite }}-logs
+          path: |
+            compatibility-logs/
+            swift/build/Logs/Test/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  report:
+    name: Compatibility report
+    if: always()
+    needs: [prepare, check]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+    steps:
+      - name: Summarize every check
+        uses: actions/github-script@v7
+        env:
+          TAILSCALE_VERSION: ${{ needs.prepare.outputs.version }}
+          CURRENT_VERSION: ${{ needs.prepare.outputs.current }}
+          GO_VERSION: ${{ needs.prepare.outputs.go-version }}
+          CHANGED: ${{ needs.prepare.outputs.changed }}
+          PREPARE_RESULT: ${{ needs.prepare.result }}
+          CHECK_RESULT: ${{ needs.check.result }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        with:
+          script: |
+            if (process.env.PREPARE_RESULT === 'success' && process.env.CHANGED === 'false') {
+              await core.summary
+                .addHeading('Upstream Tailscale compatibility')
+                .addRaw(`**PASS** — already at ${process.env.TAILSCALE_VERSION}; builds skipped.\n`)
+                .write();
+              return;
+            }
+            const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt, {
+              ...context.repo,
+              run_id: context.runId,
+              attempt_number: Number(process.env.RUN_ATTEMPT),
+              per_page: 100,
+            });
+            const checks = jobs.filter(job => job.name !== 'Compatibility report');
+            const rows = checks.map(job => [
+              `<a href="${job.html_url}">${job.name}</a>`,
+              job.conclusion || job.status,
+            ]);
+            const passed = process.env.PREPARE_RESULT === 'success' && process.env.CHECK_RESULT === 'success';
+            await core.summary
+              .addHeading('Upstream Tailscale compatibility')
+              .addRaw(`**${passed ? 'PASS' : 'FAIL / INCOMPLETE'}**\n\n`)
+              .addRaw(`Candidate: ${process.env.TAILSCALE_VERSION || 'release discovery failed'}\n\n`)
+              .addRaw(`Checked-in dependency: ${process.env.CURRENT_VERSION || 'unavailable'}\n\n`)
+              .addRaw(`Go toolchain: ${process.env.GO_VERSION || 'unavailable'}\n\n`)
+              .addRaw(`Commit: \`${context.sha}\`\n\n`)
+              .addTable([[{data: 'Check', header: true}, {data: 'Result', header: true}], ...rows])
+              .addRaw('\nBuild logs, dependency files, and available Xcode test results are attached as run artifacts. Setup failures are recorded in the linked job logs.\n')
+              .addRaw('\nSample apps are built without signing or tailnet credentials; they are not exercised against a live tailnet.\n')
+              .write();
+            if (!passed) {
+              core.setFailed('Upstream compatibility checks failed or did not complete. See the job summary and artifacts.');
+            }
