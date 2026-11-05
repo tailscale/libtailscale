@@ -1,5 +1,7 @@
 # libtailscale
 
+[![Upstream Tailscale compatibility](https://github.com/tailscale/libtailscale/actions/workflows/upstream-compatibility.yml/badge.svg?branch=main)](https://github.com/tailscale/libtailscale/actions/workflows/upstream-compatibility.yml)
+
 libtailscale is a C library that embeds Tailscale into a process.
 
 Use this library to compile Tailscale into your program and get
@@ -33,6 +35,13 @@ or
 ```
 make shared
 ```
+
+## Upstream compatibility checks
+
+The **Upstream Tailscale compatibility** GitHub Action runs weekly or manually
+to test the library, bindings, and samples against the latest stable Tailscale
+release. Matching versions skip the builds and report success. See the workflow
+run for results and logs.
 
 ## Bugs
 
