@@ -37,10 +37,13 @@ final class TailscaleKitTests: XCTestCase {
         try await runConnectionTests(for: .v6)
     }
 
-    func runConnectionTests(for netType: IPAddrType) async throws {
-        let logger = BlackholeLogger()
+    func testSendShortMessage() async throws {
+        try await runConnectionTests(for: .v4, message: Data("ping".utf8))
+    }
 
-        let want = "Hello Tailscale".data(using: .utf8)!
+    func runConnectionTests(for netType: IPAddrType,
+                            message want: Data = Data("Hello Tailscale".utf8)) async throws {
+        let logger = BlackholeLogger()
 
         do {
             let ts1 = try TailscaleNode(config: mockConfig(), logger: logger)
@@ -95,7 +98,7 @@ final class TailscaleKitTests: XCTestCase {
 
                 let got = try await inbound.receiveMessage(timeout: 2)
                 print("got \(got)")
-                XCTAssert(got == want)
+                XCTAssertEqual(got, want)
 
                 msgReceived.fulfill()
             }
