@@ -102,14 +102,23 @@ The "node" created here should show up in the Tailscale admin panel as "TSNet-Te
 
 ### LocalAPI
 
-TailscaleKit.framework also includes a functional (though somewhat incomplete) implementation of 
+TailscaleKit.framework also includes a functional, but experimental, implementation of 
 LocalAPI which can be used to track the state of the embedded tailscale instance in much greater
 detail.
 
+`LocalAPIClient.watchIPNBus` is the primary mechanism for observing the tailnet.  Subscribe with
+`[.initialStatus, .peerChanges, .peerPatches]` to track the tailnet status and peers.  The first message
+carries an `Ipn.Notify.InitialStatus` snapshot; seed from it using `Tailcfg.Node(from:status:)`.
+Subsequent notifies carry peer deltas: `PeersChanged` (upsert by node ID), `PeersRemoved`,
+`PeerChangedPatch` (apply with `Ipn.PeerChange.applyTo(node:)`), `UserProfiles` and `SelfChange`.
+These are order-dependent; notifies are delivered to your `MessageConsumer` in arrival order.
+
+See `HelloModel` in the TailscaleKitHello example for a complete implementation.
+
 ### Examples
 
-See the TailscaleKitHello example for a relatively complete implementation demonstrating proxied
-HTTP and usage of LocalAPI to track the tailnet state.
+See the TailscaleKitHello example for an implementation demonstrating proxied HTTP and usage of
+ LocalAPI to track the tailnet state.
 
 ## Contributing
 

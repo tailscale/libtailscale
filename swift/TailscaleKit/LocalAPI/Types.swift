@@ -45,11 +45,57 @@ public struct Ipn: Sendable {
         public var LoginFinished: Empty.Message?
         public var State: State?
         public var Prefs: Prefs?
-        public var NetMap: Netmap.NetworkMap?
         public var Engine: EngineStatus?
         public var BrowseToURL: String?
         public var LocalTCPPort: UInt16?
         public var ClientVersion: Tailcfg.ClientVersion?
+
+        /// The current status, sent only in the first message of a session
+        /// opened with ``NotifyWatchOpt/initialStatus``.  Seed the peer set
+        /// from this, then track it with the peer delta fields below.
+        public var InitialStatus: IpnState.Status?
+
+        /// This node's own ``Tailcfg/Node``, when it has changed.  Delivered
+        /// to every watcher regardless of mask.  There is no initial
+        /// SelfChange; seed from ``InitialStatus``.
+        public var SelfChange: Tailcfg.Node?
+
+        /// Peers added or wholly replaced since the last Notify.  Upsert by
+        /// ``Tailcfg/Node/ID``.
+        public var PeersChanged: [Tailcfg.Node]?
+
+        /// Peers removed since the last Notify.
+        public var PeersRemoved: [Tailcfg.NodeID]?
+
+        /// Narrow per-field peer changes since the last Notify.  Requires
+        /// ``NotifyWatchOpt/peerPatches``; without it the backend promotes
+        /// each patch to a full node in ``PeersChanged``.
+        public var PeerChangedPatch: [PeerChange]?
+
+        /// User profiles added or updated since the last Notify, keyed by
+        /// stringified ``Tailcfg/UserID``.  Resolves the users referenced by
+        /// ``PeersChanged``.
+        public var UserProfiles: [String: Tailcfg.UserProfile]?
+    }
+
+    /// A narrow change to a single peer.  See ``Notify/PeerChangedPatch``.
+    public struct PeerChange: Codable, Sendable {
+        public var NodeID: Tailcfg.NodeID
+        public var Online: Bool?
+        public var LastSeen: Time.Time?
+        public var KeyExpiry: Time.Time?
+
+        public func applyTo(node: inout Tailcfg.Node) {
+            if let Online {
+                node.Online = Online
+            }
+            if let LastSeen {
+                node.LastSeen = LastSeen
+            }
+            if let KeyExpiry {
+                node.KeyExpiry = KeyExpiry
+            }
+        }
     }
 
     public struct NotifyWatchOpt: OptionSet, Sendable {
@@ -59,18 +105,26 @@ public struct Ipn: Sendable {
             self.rawValue = rawValue
         }
 
-        public static let engineUpdates    = NotifyWatchOpt(rawValue: 1 << 0)
-        public static let initialState     = NotifyWatchOpt(rawValue: 1 << 1)
-        public static let prefs            = NotifyWatchOpt(rawValue: 1 << 2)
-        public static let netmap           = NotifyWatchOpt(rawValue: 1 << 3)
-        public static let noPrivateKeys    = NotifyWatchOpt(rawValue: 1 << 4)
-        public static let rateLimitNetmaps = NotifyWatchOpt(rawValue: 1 << 8)
+        public static let engineUpdates        = NotifyWatchOpt(rawValue: 1 << 0)
+        public static let initialState         = NotifyWatchOpt(rawValue: 1 << 1)
+        public static let prefs                = NotifyWatchOpt(rawValue: 1 << 2)
+        public static let noPrivateKeys        = NotifyWatchOpt(rawValue: 1 << 4)
+        public static let notifyInitialVersion = NotifyWatchOpt(rawValue: 1 << 11)
+
+        /// Opt into peer-set deltas: ``Notify/PeersChanged``,
+        /// ``Notify/PeersRemoved`` and ``Notify/UserProfiles``.
+        public static let peerChanges          = NotifyWatchOpt(rawValue: 1 << 12)
+
+        /// Deliver ``Notify/InitialStatus`` in the first message of the session.
+        public static let initialStatus        = NotifyWatchOpt(rawValue: 1 << 14)
+
+        /// Opt into ``Notify/PeerChangedPatch``.  Implies ``peerChanges``.
+        public static let peerPatches          = NotifyWatchOpt(rawValue: 1 << 15)
     }
 
     public struct Prefs: Codable, Sendable {
         public var ControlURL: String = ""
         public var RouteAll: Bool = false
-        public var AllowSingleHosts: Bool = false
         public var CorpDNS: Bool = false
         public var WantRunning: Bool = false
         public var LoggedOut: Bool = false
@@ -229,9 +283,16 @@ public struct IpnLocal: Sendable {
 public struct IpnState: Sendable {
     public struct PeerStatus: Codable, Equatable, Sendable {
         public var ID: Tailcfg.StableNodeID
+        public var NodeID: Tailcfg.NodeID
+        public var PublicKey: Key.NodePublic
         public var HostName: String
         public var DNSName: String
+        public var OS: String
+        public var UserID: Tailcfg.UserID
+        /// The user who shared this node, if different from ``UserID``.
+        public var AltSharerUserID: Tailcfg.UserID?
         public var TailscaleIPs: [IP.Addr]?
+        public var AllowedIPs: [IP.Prefix]?
         public var Tags: [String]?
         public var PrimaryRoutes: [String]?
         public var Addrs: [String]?
@@ -243,9 +304,21 @@ public struct IpnState: Sendable {
         public var ExitNodeOption: Bool
         public var PeerAPIURL: [String]?
         public var Capabilities: [String]?
-        public var SSH_HostKeys: [String]?
+        public var sshHostKeys: [String]?
         public var ShareeNode: Bool?
+        public var LastSeen: Time.Time?
+        public var KeyExpiry: Time.Time?
         public var Expired: Bool?
+
+        /// ``DNSName`` with the tailnet's MagicDNS suffix stripped.
+        public func ComputedName(_ status: Status) -> String {
+            let name = DNSName
+            guard let suffix = status.CurrentTailnet?.MagicDNSSuffix,
+                  name.hasSuffix("." + suffix + ".") else {
+                return name
+            }
+            return String(name.dropLast(suffix.count + 2))
+        }
     }
 
     public  struct PeerStatusLite: Codable, Sendable, Equatable {
@@ -301,34 +374,6 @@ public struct IpnState: Sendable {
         public var IP: IP.Addr
         public var Err: String
         public var LatencySeconds: TimeInterval
-    }
-}
-
-public struct Netmap: Sendable {
-    public struct NetworkMap: Codable, Equatable, Sendable {
-        public var SelfNode: Tailcfg.Node
-        public var NodeKey: Key.NodePublic
-        public var Peers: [Tailcfg.Node]?
-        public var Domain: String
-        public var UserProfiles: [String: Tailcfg.UserProfile] // Keys are tailcfg.UserIDs thet get stringified
-        public var DNS: Tailcfg.DNSConfig?
-
-        public func currentUserProfile() -> Tailcfg.UserProfile? {
-            return userProfile(for: SelfNode.User)
-        }
-
-        public func userProfile(for id: Int64) -> Tailcfg.UserProfile? {
-            return UserProfiles[String(id)]
-        }
-
-        public static func == (lhs: Netmap.NetworkMap, rhs: Netmap.NetworkMap) -> Bool {
-            lhs.SelfNode == rhs.SelfNode &&
-            lhs.NodeKey == rhs.NodeKey &&
-            lhs.Peers == rhs.Peers &&
-            lhs.Domain == rhs.Domain &&
-            lhs.UserProfiles == rhs.UserProfiles &&
-            lhs.DNS == rhs.DNS
-        }
     }
 }
 
@@ -388,10 +433,7 @@ public struct Tailcfg: Sendable {
         }
 
         public var KeyDoesNotExpire: Bool {
-            if KeyExpiry == GoZeroTimeString {
-                return true
-            }
-            return false
+            return KeyExpiry == nil || KeyExpiry == GoZeroTimeString
         }
 
         public var HasExpiredAuth: Bool {
@@ -474,6 +516,35 @@ public struct Tailcfg: Sendable {
         public var Notify: Bool?
         public var NotifyURL: String?
         public var NotifyText: String?
+    }
+}
+
+extension Tailcfg.Node {
+    /// Synthesizes a node from the ``IpnState/PeerStatus`` carried by
+    /// ``IpnState/Status``, for seeding a peer set from
+    /// ``Ipn/Notify/InitialStatus`` before applying deltas.
+    ///
+    /// PeerStatus carries strictly less than a node, so fields it does not
+    /// report are left at their default.
+    public init(from peer: IpnState.PeerStatus, status: IpnState.Status) {
+        self.init(ID: peer.NodeID,
+                  StableID: peer.ID,
+                  Name: peer.DNSName,
+                  User: peer.UserID,
+                  Sharer: peer.AltSharerUserID,
+                  Key: peer.PublicKey,
+                  KeyExpiry: peer.KeyExpiry,
+                  Addresses: peer.TailscaleIPs,
+                  AllowedIPs: peer.AllowedIPs,
+                  Hostinfo: Tailcfg.Hostinfo(OS: peer.OS,
+                                             ShareeNode: peer.ShareeNode,
+                                             Hostname: peer.HostName),
+                  LastSeen: peer.LastSeen,
+                  Online: peer.Online,
+                  Capabilities: peer.Capabilities,
+                  Tags: peer.Tags,
+                  ComputedName: peer.ComputedName(status),
+                  ComputedNameWithHost: peer.DNSName)
     }
 }
 

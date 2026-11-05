@@ -49,19 +49,26 @@ public actor LocalAPIClient {
 
     // MARK: - IPN Bus
 
-    /// watchIPNBus subscribes to the IPN notification bus.   This is the primary mechanism that should be implemented for observing
-    /// changes to the state of the tailnet.  This opens a long-polling HTTP request and feeds events to the consumer, via the processor.
-    /// For large tailnets, or tailnets with large numbers of ephemeral devices, it is recommended that you always pass the rateLimitNetmaps
-    /// option.  Netap updates may be large and frequent and the resources required to parse the incoming JSON are non-trivial..  The
-    /// rateLimitNetmaps option will limit netmap updates to roughly one ever 3 seconds.
+    /// watchIPNBus subscribes to the IPN notification bus.  This is the primary mechanism for observing changes to the state
+    /// of the tailnet.  It opens a long-polling HTTP request and feeds events to the consumer, via the processor.
+    ///
+    /// To track the peer set, pair ``Ipn/NotifyWatchOpt/initialStatus`` with ``Ipn/NotifyWatchOpt/peerChanges`` and
+    /// ``Ipn/NotifyWatchOpt/peerPatches``.  The first message then carries an
+    /// ``Ipn/Notify/InitialStatus`` snapshot to seed from, and subsequent messages carry only what changed:
+    /// ``Ipn/Notify/PeersChanged``, ``Ipn/Notify/PeersRemoved``, ``Ipn/Notify/PeerChangedPatch``,
+    /// ``Ipn/Notify/UserProfiles`` and ``Ipn/Notify/SelfChange``.  Without `peerPatches`, narrow per-field changes
+    /// arrive as full node replacements in `PeersChanged` instead, which is considerably more expensive on a large
+    /// tailnet.
+    ///
+    /// Notifies are delivered to the consumer in arrival order.  Peer deltas must be applied in that order.
     ///
     /// You may spawn multiple bus watchers, but a single application-wide watcher with the full set of opts will often suffice.
     ///
     /// - Parameters:
     ///   - mask: a mask indicating the events we wish to observe
     ///   - consumer: an actor implementing MessageConsumer to which incoming events will be sent
-    /// - Returns: The MessageProcessor handling the incoming event stream.  This should be destroyed/stopped when the caller
-    ///            wishes to unsubscribe from the event stream.
+    /// - Returns: The MessageProcessor handling the incoming event stream.  Call ``MessageProcessor/cancel()`` on it to
+    ///            unsubscribe and close the underlying long poll.
     public func watchIPNBus(mask: Ipn.NotifyWatchOpt, consumer: MessageConsumer) async throws -> MessageProcessor {
         let params = [URLQueryItem(name: "mask", value: String(mask.rawValue))]
         let (request, sessionConfig) = try await self.basicAuthURLRequest(endpoint: .watchIPNBus,
@@ -69,7 +76,7 @@ public actor LocalAPIClient {
                                                                           params: params)
 
         let messageProcessor = await MessageProcessor(consumer: consumer, logger: logger)
-        messageProcessor.start(request, config: sessionConfig)
+        await messageProcessor.start(request, config: sessionConfig)
         return messageProcessor
     }
 
