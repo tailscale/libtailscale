@@ -151,6 +151,10 @@ func TestRecvFdCloexec(t *testing.T) {
 	}
 }
 
+func TestSetLogFD(t *testing.T) {
+	tsnetctest.RunTestSetLogFD(t)
+}
+
 func TestExtractIP(t *testing.T) {
 	ipv4 := "1.23.33.4:12343"
 	ipv6 := "[1::2234::34fc::44]:56576"
