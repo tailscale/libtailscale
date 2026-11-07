@@ -17,12 +17,13 @@ all: test ios macos ios-fat  ## Runs the tests and builds all library targets
 macos:  ## Builds TailscaleKit for macos to swift/build/Build/Products/Release (unsigned)
 	@echo
 	@echo "::: Building TailscaleKit.framework for macOS :::"
-	cd .. && make c-archive
+	cd .. && make c-archive-macos-universal
 	mkdir -p build
 	xcodebuild build -scheme "TailscaleKit (macOS)" \
 	 -derivedDataPath build \
 	 -configuration Release \
-	 -destination 'platform=macOS,arch=arm64' \
+	 -destination 'generic/platform=macOS' \
+	 ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO \
 	 CODE_SIGNING_ALLOWED=NO | $(XCPRETTIFIER)
 
 .PHONY: ios
