@@ -46,6 +46,12 @@ public actor LocalAPIClient {
         self.logger = logger
     }
 
+    /// Pass as `watchIPNBus(timeoutInterval:)` to keep a long poll open across an idle tailnet.
+    /// URLSession has no sentinel for "never": a non-finite timeoutIntervalForRequest is not
+    /// honoured, and a non-positive one restores the 60s default.  So this is simply a span no
+    /// watch will reach.
+    public static let noTimeout: TimeInterval = 365 * 24 * 60 * 60
+
 
     // MARK: - IPN Bus
 
@@ -60,13 +66,31 @@ public actor LocalAPIClient {
     /// - Parameters:
     ///   - mask: a mask indicating the events we wish to observe
     ///   - consumer: an actor implementing MessageConsumer to which incoming events will be sent
+    ///   - timeoutInterval: how long the poll may go WITHOUT receiving data before URLSession fails it
+    ///                      with NSURLErrorTimedOut.  This is not a budget for the whole watch — the
+    ///                      timer restarts on every byte.  Defaults to `noTimeout`, because a watch
+    ///                      should outlive a quiet tailnet; pass a finite value to have the consumer's
+    ///                      error callback run on a schedule instead.
     /// - Returns: The MessageProcessor handling the incoming event stream.  This should be destroyed/stopped when the caller
     ///            wishes to unsubscribe from the event stream.
-    public func watchIPNBus(mask: Ipn.NotifyWatchOpt, consumer: MessageConsumer) async throws -> MessageProcessor {
+    public func watchIPNBus(mask: Ipn.NotifyWatchOpt,
+                            consumer: MessageConsumer,
+                            timeoutInterval: TimeInterval = LocalAPIClient.noTimeout) async throws -> MessageProcessor {
         let params = [URLQueryItem(name: "mask", value: String(mask.rawValue))]
-        let (request, sessionConfig) = try await self.basicAuthURLRequest(endpoint: .watchIPNBus,
-                                                                          method: .GET,
-                                                                          params: params)
+        var request: URLRequest
+        let sessionConfig: URLSessionConfiguration
+        (request, sessionConfig) = try await self.basicAuthURLRequest(endpoint: .watchIPNBus,
+                                                                      method: .GET,
+                                                                      params: params)
+
+        // basicAuthURLRequest hands back URLSessionConfiguration.default, whose
+        // timeoutIntervalForRequest is 60s measured from the LAST byte received.  The bus sends
+        // nothing while the tailnet is idle, so leaving that default in place fails a quiet watch
+        // with -1001 about once a minute, forever.  doSimpleAPIRequest and doJSONAPIRequest below
+        // already take a timeoutInterval and set it on the request; the long poll — the one
+        // endpoint that genuinely needs to outlast its own silence — is the one that never did.
+        request.timeoutInterval = timeoutInterval
+        sessionConfig.timeoutIntervalForRequest = timeoutInterval
 
         let messageProcessor = await MessageProcessor(consumer: consumer, logger: logger)
         messageProcessor.start(request, config: sessionConfig)
