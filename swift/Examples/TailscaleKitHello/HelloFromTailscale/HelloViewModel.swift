@@ -7,23 +7,20 @@ import SwiftUI
 import TailscaleKit
 
 @Observable
-class HelloViewModel: @unchecked Sendable    {
+@MainActor
+final class HelloViewModel: Sendable    {
     var message: String = "Ready to phone home!"
     var peerCountMessage = "Waiting for peers...."
     var stateMessage = "Waiting for state...."
+    var selfNodeMessage = "Waiting for this node...."
+    var authURL: URL?
 
     var modelObservers = [Task<Void, Never>]()
 
-    @MainActor
     init(model: HelloModel) {
         bindToModel(model)
     }
 
-    deinit {
-        modelObservers.forEach { $0.cancel() }
-    }
-
-    @MainActor
     func handleStateChange(_ state: Ipn.State?) {
         guard let state else {
             self.stateMessage = "Waiting for state...."
@@ -32,13 +29,7 @@ class HelloViewModel: @unchecked Sendable    {
         self.stateMessage = "IPNState: \(state)"
     }
 
-    @MainActor
-    func handlePeersChange(_ peers: [Tailcfg.Node]?) {
-        guard let peers else {
-            self.peerCountMessage = "Waiting for peers..."
-            return
-        }
-        
+    func handlePeersChange(_ peers: [Tailcfg.Node]) {
         if peers.count > 0 {
             self.peerCountMessage = "Found \(peers.count) peers"
         } else {
@@ -46,7 +37,18 @@ class HelloViewModel: @unchecked Sendable    {
         }
     }
 
-    @MainActor
+    func handleSelfNodeChange(_ node: Tailcfg.Node?) {
+        guard let node else {
+            self.selfNodeMessage = "Waiting for this node...."
+            return
+        }
+        self.selfNodeMessage = "This node: \(node.ComputedName)"
+    }
+
+    func handleBrowseToURLChange(_ url: String?) {
+        self.authURL = url.flatMap { URL(string: $0) }
+    }
+
     func bindToModel(_ model: HelloModel) {
         modelObservers.forEach { $0.cancel() }
         modelObservers.removeAll()
@@ -54,13 +56,31 @@ class HelloViewModel: @unchecked Sendable    {
         Task {
             await handleStateChange(model.state)
             await handlePeersChange(model.peers)
+            await handleSelfNodeChange(model.selfNode)
+            await handleBrowseToURLChange(model.browseToURL)
         }
+
+        modelObservers.append( Task { [weak self] in
+            for await url in await model.browseToURLStream {
+                if Task.isCancelled { return }
+                guard let self = self else { return }
+                await MainActor.run { handleBrowseToURLChange(url) }
+            }
+        })
 
         modelObservers.append( Task { [weak self] in
             for await peers in await model.peersStream {
                 if Task.isCancelled { return }
                 guard let self = self else { return }
                 await MainActor.run { handlePeersChange(peers) }
+            }
+        })
+
+        modelObservers.append( Task { [weak self] in
+            for await node in await model.selfNodeStream {
+                if Task.isCancelled { return }
+                guard let self = self else { return }
+                await MainActor.run { handleSelfNodeChange(node) }
             }
         })
 
@@ -73,13 +93,12 @@ class HelloViewModel: @unchecked Sendable    {
         })
     }
 
-    @MainActor
     func setMessage(_ message: String) {
         self.message =  message
     }
 
     func runRequest(_ dialer: Dialer) {
-        Task {
+        Task.detached {
             let model = self
             await dialer.phoneHome { msg in
                 await MainActor.run {

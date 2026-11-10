@@ -3,127 +3,140 @@
 
 import Foundation
 
-enum MessageQueueError: Error {
-    case queueCongested
+public enum MessageProcessorError: Error, Equatable {
+    case busClosedUnexpectedly
 }
 
-/// The maximum number of unprocessed messages that can be queued before we start discarding
-/// This needs to be large enough to handle the bursty "first time" connection messages but
-/// small enough to avoid our memory footprint growing arbitrarily large.
-let kMaxQueueSize = 24
+/// MessageStreamDelegate owns all of the mutable state belonging to a single URLSession:
+/// the partial message buffer and the continuation for the stream of completed messages.
+///
+/// Everything here runs on `queue`, the serial OperationQueue that the owning session
+/// delivers its callbacks on, so messages are yielded in arrival order without locking.
+final class MessageStreamDelegate: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+    /// The serial delegate queue for the owning session.  All state in this class is
+    /// confined to it.
+    let queue: OperationQueue = {
+        let q = OperationQueue()
+        q.maxConcurrentOperationCount = 1
+        return q
+    }()
 
-/// Provides a queue for incoming messages on the IPN bus.  This will keep a maximum of
-/// the last kMaxQueueSize inbound messages pending processing. If the queue is congested, we will
-/// stop queueing messages and throw an error once the queue has been drained.
-final class MessageReader: NSObject, URLSessionDataDelegate, @unchecked Sendable {
-    /// All mutation and reading of local state happens in workQueue.
-    let workQueue = OperationQueue()
+    private let continuation: AsyncThrowingStream<Data, any Error>.Continuation
 
-    /// Holds partial incoming messages
-    var buffer: Data = Data()
-    var ipnWatchSession: URLSession?
-    var dataTask: URLSessionDataTask?
+    /// Holds partial incoming messages.  Must only be read/mutated on `queue`.
+    private(set) var buffer = Data()
 
-    var logger: LogSink?
-
-    /// FIFO queue for messages awaiting processing
-    var pendingMessages: [Data] = []
-
-    /// Once congested, we will allow the processor to empty the queue, but we will stop queueing messages.
-    /// consume()ing the last messages will trigger a MessageQueueError.queueCongested error which the
-    /// upstream consumer can use.  Typically, this means we lost messages, so the correct action is to
-    /// restart the processor and queue with an .initialState flag.
-    var congested = false
-
-    var errorHandler: (@Sendable (Error) -> Void)?
-
-    init(logger: LogSink? = nil) {
-        self.logger = logger
-        workQueue.maxConcurrentOperationCount = 1
-        workQueue.name = "io.tailscale.ipn.MessageReader.workQueue"
+    init(continuation: AsyncThrowingStream<Data, any Error>.Continuation) {
+        self.continuation = continuation
+        super.init()
     }
 
-    func stop() {
-        ipnWatchSession?.invalidateAndCancel()
-        workQueue.cancelAllOperations()
-    }
-
-    func start(_ request: URLRequest, config: URLSessionConfiguration, errorHandler: @escaping @Sendable (Error) -> Void  ) {
-        workQueue.addOperation { [weak self] in
-            guard let self = self else { return }
-
-            self.errorHandler = errorHandler
-
-            buffer = Data()
-            pendingMessages = []
-            congested = false
-
-            dataTask?.cancel()
-            ipnWatchSession?.invalidateAndCancel()
-
-            ipnWatchSession = URLSession(configuration: config,
-                                         delegate: self,
-                                         delegateQueue: workQueue)
-
-            dataTask = ipnWatchSession?.dataTask(with: request)
-            dataTask?.resume()
-        }
-    }
-
-    func consume(_ completion: @escaping @Sendable (Data?) -> Void) {
-        workQueue.addOperation { [weak self] in
-            guard let self else { return }
-            if congested && pendingMessages.count == 0 {
-                errorHandler?(MessageQueueError.queueCongested)
-                completion(nil)
-                return
-            }
-
-            guard pendingMessages.count > 0 else {
-                completion(nil)
-                return
-            }
-            completion(pendingMessages.removeFirst())
-        }
+    /// Ends the message stream without an error.  Idempotent, and safe to call from
+    /// any thread.
+    func finish() {
+        continuation.finish()
     }
 
     // MARK: - URLSessionDataDelegate
 
     func urlSession(_ session: URLSession,
-                    task: URLSessionTask,
-                    didCompleteWithError error: Error?) {
-        if let error = error {
-            let nsError = error as NSError
-            // Ignore cancellation errors, those are deliberate.
-            if nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled {
-                return
-            }
-            errorHandler?(error)
-        }
+                    dataTask: URLSessionDataTask,
+                    didReceive data: Data) {
+        receive(data)
     }
 
     func urlSession(_ session: URLSession,
-                    dataTask: URLSessionDataTask,
-                    didReceive data: Data) {
-        if congested {
-            return
-        }
-        receiveData(data)
+                    task: URLSessionTask,
+                    didCompleteWithError error: (any Error)?) {
+        complete(with: error)
     }
 
-    func receiveData(_ data: Data) {
-        workQueue.addOperation { [weak self] in
-            guard let self else { return }
+    // MARK: - Queue confined state
 
-            buffer.append(data)
-            if buffer[buffer.count - 1] == kJsonNewline {
-                if pendingMessages.count >= kMaxQueueSize {
-                    congested = true
-                    return
-                }
-                pendingMessages.append(buffer)
-                buffer.removeAll(keepingCapacity: true)
-            }
+    /// Buffers `data`, yielding to the stream once we have at least one complete line.
+    /// LocalAPI bus messages are line delimited.
+    /// Must be invoked on `queue`.
+    func receive(_ data: Data) {
+        buffer.append(data)
+        guard buffer.last == kJsonNewline else { return }
+        continuation.yield(buffer)
+        buffer.removeAll(keepingCapacity: true)
+    }
+
+    /// Ends the message stream, reporting `error` to the consumer unless the session
+    /// was cancelled deliberately.  Must be invoked on `queue`.
+    func complete(with error: (any Error)?) {
+        // Anything still buffered was cut off mid-line and can never be parsed.
+        buffer.removeAll()
+
+        guard let error else {
+            // The long poll went away without telling us why.
+            continuation.finish(throwing: MessageProcessorError.busClosedUnexpectedly)
+            return
         }
+
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled {
+            // Deliberate cancellation, not a failure.
+            continuation.finish()
+            return
+        }
+
+        continuation.finish(throwing: error)
+    }
+}
+
+/// MessageReader manages the URLSession long poll against the IPN bus and vends an
+/// ordered stream of newline delimited messages from it.
+actor MessageReader {
+    private var session: URLSession?
+    private var delegate: MessageStreamDelegate?
+
+    let logger: LogSink?
+
+    init(logger: LogSink? = nil) {
+        self.logger = logger
+    }
+
+    /// (Re)starts the long poll, discarding any existing session and its pending
+    /// messages, and returns the message stream for the new session.
+    ///
+    /// The stream ends when the session is stopped, and throws if the long poll fails
+    /// or closes unexpectedly.  Abandoning the stream stops the long poll: the reader
+    /// deliberately doesn't hold on to the stream, so the consumer's iteration is what
+    /// keeps the session alive.
+    func start(_ request: URLRequest,
+               config: URLSessionConfiguration) -> AsyncThrowingStream<Data, any Error> {
+        stop()
+
+        let (stream, continuation) = AsyncThrowingStream<Data, any Error>.makeStream()
+        let delegate = MessageStreamDelegate(continuation: continuation)
+        let session = URLSession(configuration: config,
+                                 delegate: delegate,
+                                 delegateQueue: delegate.queue)
+
+        continuation.onTermination = { [weak session] _ in
+            session?.invalidateAndCancel()
+        }
+
+        self.session = session
+        self.delegate = delegate
+
+        session.dataTask(with: request).resume()
+        logger?.log("Started IPN watch session")
+
+        return stream
+    }
+
+    /// Cancels the long poll and ends the message stream.
+    func stop() {
+        guard let session else { return }
+        logger?.log("Stopping IPN watch session")
+
+        delegate?.finish()
+        session.invalidateAndCancel()
+
+        self.session = nil
+        self.delegate = nil
     }
 }

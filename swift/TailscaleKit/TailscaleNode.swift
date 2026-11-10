@@ -166,21 +166,21 @@ public actor TailscaleNode {
 
     /// Tears down the Tailscale server.
     ///
-    /// @See tailscale_down in Tailscale.h
+    /// @See tailscale_close in Tailscale.h
     ///
     /// @throws TailscaleError on failure
-    public func down() throws {
+    public func close() throws {
         guard let tailscale else {
             throw TailscaleError.badInterfaceHandle
         }
-        logger?.log("Taking Tailscale down :\(tailscale)")
+        logger?.log("Closing Tailscale:\(tailscale)")
 
-        let res = tailscale_up(tailscale)
+        let res = tailscale_close(tailscale)
 
         guard res == 0 else {
             throw TailscaleError.fromPosixErrCode(res, tailscale.getErrorMessage())
         }
-        logger?.log("Took Tailscale down:\(tailscale)")
+        logger?.log("Closed:\(tailscale)")
     }
 
     /// Returns the addresses on the Tailscale server

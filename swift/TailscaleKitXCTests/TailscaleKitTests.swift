@@ -117,8 +117,8 @@ final class TailscaleKitTests: XCTestCase {
             print("closing  conn")
             await outgoing.close()
 
-            try await ts1.down()
-            try await ts2.down()
+            try await ts1.close()
+            try await ts2.close()
         } catch {
             XCTFail("Init Failed: \(error)")
         }
@@ -177,6 +177,10 @@ final class TailscaleKitTests: XCTestCase {
 
             let peerStatus = status.SelfStatus!
             XCTAssertTrue(peerStatus.Online)
+
+            let prefs = try await api.getPrefs()
+            XCTAssertFalse(prefs.ControlURL.isEmpty)
+            XCTAssertTrue(prefs.WantRunning)
         } catch {
             XCTFail(error.localizedDescription)
         }

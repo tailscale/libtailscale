@@ -5,99 +5,90 @@ import Foundation
 
 let kJsonNewline = UInt8(ascii: "\n")
 
-/// The polling interval for the message queue
-let kProcessorQueuePollInterval: UInt64 = 100_000_000 // Nanos
-
 /// A MessageConsumer consumes incoming messages from the IPNBus and handles any
 /// potential errors.
 public protocol MessageConsumer: Actor {
-     func notify(_ notify: Ipn.Notify)
-     func error(_ error: Error)
+    /// Invoked once per Notify, in arrival order.  Peer deltas are
+    /// order-dependent, so the implementation must complete all state
+    /// mutation before returning.
+    func notify(_ notify: Ipn.Notify) async
+    func error(_ error: any Error)
 }
 
 
-/// MessageProcessor pulls queued Decodable messages from a MessageReader, deserializes them
-/// and forwards the deserialized objects and any errors to the consumer.
-public class MessageProcessor: @unchecked Sendable {
+/// MessageProcessor reads messages from a MessageReader, deserializes them and
+/// forwards the deserialized objects and any errors to the consumer.
+///
+/// Messages are processed in the actor's context, which serializes the
+/// operations so order is maintained.
+public actor MessageProcessor {
     let consumer: any MessageConsumer
     let reader: MessageReader
-    let workQueue = OperationQueue()
-    var logger: LogSink?
+    let logger: LogSink?
 
-
-    // A long running task to poll the queue
-    var pollTask: Task<Void, Error>?
+    var pollTask: Task<Void, Never>?
 
     init(consumer: any MessageConsumer, logger: LogSink?) async {
-        workQueue.maxConcurrentOperationCount = 1
-        workQueue.name = "io.tailscale.ipn.MessageProcessor.workQueue"
-
         self.logger = logger
         self.consumer = consumer
-        self.reader = MessageReader()
+        self.reader = MessageReader(logger: logger)
     }
 
-    deinit {
-        cancel()
-        reader.stop()
-    }
+    func start(_ request: URLRequest,
+               config: URLSessionConfiguration,
+               errorHandler: (@Sendable (any Error) -> Void)? = nil) {
+        logger?.log("Starting MessageProcessor for \(request.url?.absoluteString ?? "nil")")
 
-    func start(_ request: URLRequest, config: URLSessionConfiguration, errorHandler: (@Sendable (Error) -> Void)? = nil) {
-        workQueue.addOperation { [weak self] in
-            guard let self = self else { return }
-            logger?.log("Starting MessageProcessor for \(request.url?.absoluteString ?? "nil")")
-            cancel()
-            let errorHandler = errorHandler ?? { [weak self] error in
-                self?.processError(error)
-            }
+        let errorHandler = errorHandler ?? { [weak self] error in
+            self?.processError(error)
+        }
 
-            reader.start(request, config: config, errorHandler: errorHandler)
-            startMessageQueuePoll()
+        pollTask?.cancel()
+        pollTask = Task { [weak self] in
+            guard let self, !Task.isCancelled else { return }
+            let messages = await reader.start(request, config: config)
+            await watchMessageQueue(messages, errorHandler: errorHandler)
         }
     }
 
-    public  func cancel() {
+    /// Ends the subscription, closing the underlying long poll.
+    public func cancel() async {
         pollTask?.cancel()
+        pollTask = nil
+        await reader.stop()
     }
 
-    func startMessageQueuePoll() {
-        pollTask?.cancel()
-        pollTask = Task {
-            await watchMessageQueue()
-        }
-    }
-
-    func watchMessageQueue() async {
+    /// Consumes messages in arrival order until the poll task is cancelled, the reader is
+    /// stopped, or the long poll fails.  Failures are handed to errorHandler, which is
+    /// responsible for restarting the bus.
+    func watchMessageQueue(_ messages: AsyncThrowingStream<Data, any Error>,
+                           errorHandler: @escaping @Sendable (any Error) -> Void) async {
         logger?.log("Watching MessageReader")
-        while !Task.isCancelled {
-            reader.consume { [weak self] data in
-                if let data {
-                    self?.processMessage(data)
-                }
+        do {
+            for try await data in messages {
+                if Task.isCancelled { break }
+                await processMessage(data)
             }
-            try? await Task.sleep(nanoseconds: kProcessorQueuePollInterval)
+        } catch {
+            errorHandler(error)
         }
         logger?.log("Unwatching MessageReader")
     }
 
-    func processMessage(_ data: Data) {
-        workQueue.addOperation { [weak self] in
-            guard let self else { return }
-            let lines = data.split(separator: kJsonNewline)
-            for line in lines {
-                do {
-                    let notify = try JSONDecoder().decode(Ipn.Notify.self, from: line)
-                    Task {
-                        await consumer.notify(notify)
-                    }
-                } catch {
-                    logger?.log("Failed to decode message: \(error.localizedDescription)")
-                }
+    func processMessage(_ data: Data) async {
+        let lines = data.split(separator: kJsonNewline)
+        for line in lines {
+            do {
+                let notify = try JSONDecoder().decode(Ipn.Notify.self, from: line)
+                // No spawned tasks here.  Ordering is critical.
+                await consumer.notify(notify)
+            } catch {
+                logger?.log("Failed to decode message: \(error.localizedDescription)")
             }
         }
     }
 
-    func processError(_ error: Error) {
+    nonisolated func processError(_ error: some Error) {
         Task {
             await consumer.error(error)
         }

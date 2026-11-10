@@ -22,6 +22,10 @@ protocol Dialer: Actor {
     func phoneHome(_ setMessage: @escaping MessageSender) async
 }
 
+/// Bounds for the reconnect delay after the IPN bus long poll fails.
+let kMinBusRestartDelay: UInt64 = 1_000_000_000 // Nanos
+let kMaxBusRestartDelay: UInt64 = 30_000_000_000
+
 actor HelloManager: Dialer {
     var node: TailscaleNode?
 
@@ -38,11 +42,21 @@ actor HelloManager: Dialer {
     var localAPIClient: LocalAPIClient?
     var processor: MessageProcessor?
 
+    // .initialStatus seeds the peer set; .peerChanges and .peerPatches keep it current.
+    let busEventMask: Ipn.NotifyWatchOpt = [
+        .initialState, .prefs, .initialStatus, .peerChanges, .peerPatches,
+    ]
+
+    private var busRestartDelay = kMinBusRestartDelay
+    private var restartingBus = false
+
     init() {
         let temp = getDocumentDirectoryPath().path() + "tailscale"
+        // A nil auth key puts the node on the interactive login path, which
+        // surfaces a URL to visit via Ipn.Notify.BrowseToURL.
         self.config = Configuration(hostName: Settings.hostName,
                                     path: temp,
-                                    authKey: Settings.authKey,
+                                    authKey: Settings.authKey.isEmpty ? nil : Settings.authKey,
                                     controlURL: kDefaultControlURL,
                                     ephemeral: true)
 
@@ -56,25 +70,65 @@ actor HelloManager: Dialer {
 
     private func startTailscale() async {
         do {
-            // This sets up a localAPI client attached to the local node.
+            // The initializer starts the node, which is all localAPI needs.  up() then
+            // blocks until the node is authorized, so the bus watch has to be running
+            // before we call it: a node awaiting login or machine approval never
+            // finishes up(), and the bus is how we learn that (State, BrowseToURL).
             let node = try setupNode()
-            try await node.up()
 
             // Create a localAPIClient instance for our local node
             let localAPIClient = LocalAPIClient(localNode: node, logger: logger)
             setLocalAPIClient(localAPIClient)
 
-            // This sets up a bus watcher to listen for changes in the netmap.  These will be sent to the given consumer, in
-            // this case, a HelloModel which will keep track of the changes and publish them.
-            let busEventMask: Ipn.NotifyWatchOpt = [.initialState, .netmap, .rateLimitNetmaps, .noPrivateKeys]
-            let processor = try await localAPIClient.watchIPNBus(mask: busEventMask ,
-                                                                 consumer: model)
-            setProcessor(processor)
+            await model.setBusHandlers(
+                onNotify: { [weak self] in await self?.resetBusRestartDelay() },
+                onError: { [weak self] in await self?.restartBusWatch() })
+
+            try await startBusWatch()
+
+            // Blocks until the node is authorized and usable.
+            try await node.up()
             setReady(true)
         } catch {
             Logger().log("Error setting up Tailscale: \(error)")
             setReady(false)
         }
+    }
+
+    // This sets up a bus watcher to listen for changes to the tailnet.  These will be sent to the given consumer, in
+    // this case, a HelloModel which will keep track of the changes and publish them.
+    private func startBusWatch() async throws {
+        guard let localAPIClient else { throw HelloError.noNode }
+        setProcessor(try await localAPIClient.watchIPNBus(mask: busEventMask,
+                                                          consumer: model))
+    }
+
+    /// Reconnects after the long poll behind the bus fails.  The new watch carries
+    /// .initialStatus, so the model reseeds and no state is carried over the gap.
+    func restartBusWatch() async {
+        guard !restartingBus else { return }
+        restartingBus = true
+        defer { restartingBus = false }
+
+        await processor?.cancel()
+        processor = nil
+
+        while true {
+            logger.log("Reconnecting to the IPN bus in \(busRestartDelay / 1_000_000_000)s")
+            try? await Task.sleep(nanoseconds: busRestartDelay)
+            busRestartDelay = min(busRestartDelay * 2, kMaxBusRestartDelay)
+
+            do {
+                try await startBusWatch()
+                return
+            } catch {
+                logger.log("Failed to reconnect to the IPN bus: \(error)")
+            }
+        }
+    }
+
+    func resetBusRestartDelay() {
+        busRestartDelay = kMinBusRestartDelay
     }
 
     func setLocalAPIClient(_ client: TailscaleKit.LocalAPIClient) {
